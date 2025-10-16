@@ -4,10 +4,13 @@ import torch
 from animal_face_dataset import *
 from torch.utils.data.sampler import SubsetRandomSampler
 from Animal_Classification_Network import *
-
+import argparse
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--checkpoint_filename', type=str, default='model.pt', help="Filename for the checkpoint file.")
+    args = parser.parse_args()
     #######################################################################
     # TODO: Extend the binary classification to multi-class classification
     N_CLASSES = 20 # num of classes
@@ -48,7 +51,7 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = CNN(N_CLASSES).to(device)
     # Load your saved model here!
-    model.load_state_dict(torch.load("model.pt"))
+    model.load_state_dict(torch.load(args.checkpoint_filename))
     ######################################################################
 
 

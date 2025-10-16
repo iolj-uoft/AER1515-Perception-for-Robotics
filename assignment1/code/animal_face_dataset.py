@@ -1,7 +1,12 @@
 from PIL import Image
 import torchvision.transforms as transforms
 
-transform_train = transforms.Compose([transforms.ToTensor()]) # TODO: add data augmentation transforms for training
+transform_train = transforms.Compose([
+    transforms.RandomHorizontalFlip(p=0.5),
+    transforms.RandomRotation(degrees=15),
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.02),
+    transforms.ToTensor(),
+])
 transform = transforms.Compose([transforms.ToTensor()])
 
 # !!! DO NOT MAKE ANY CHANGES AFTER THIS LINE !!!

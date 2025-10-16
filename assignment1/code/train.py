@@ -24,7 +24,7 @@ def main():
     # TODO: Extend the binary classification to multi-class classification
     N_CLASSES = 20 # num of classes
     BATCH_SIZE = 32 # training batch size
-    EPOCH_NUMBER = 30 # num of epochs
+    EPOCH_NUMBER = 40 # num of epochs
     VALIDATION_PER = 0.2 # Validation Percentage (you can play with this parameter)
     LEARNING_RATE = 1e-4 # Learning Rate
     IS_SHOW_IMAGES = False
@@ -80,7 +80,8 @@ def main():
     # Not show by default
     ####################################################
     if IS_SHOW_IMAGES:
-        images, labels = iter(train_loader).next()
+        images, labels = next(iter(torch.utils.data.DataLoader(
+            train_dataset, batch_size=BATCH_SIZE, sampler=train_sampler)))
         fig, axis = plt.subplots(3, 5, figsize=(15, 10))
         for i, ax in enumerate(axis.flat):
             with torch.no_grad():
@@ -100,7 +101,7 @@ def main():
     model = CNN(N_CLASSES).to(device)
     criterion = nn.CrossEntropyLoss()
     # TODO: Change to other optimizers
-    optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
+    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE)
     #################################################################################
 
 
@@ -109,7 +110,7 @@ def main():
     ####################################################################################
     TRAIN_LOSS = []
     VALIDATION_LOSS = []
-
+    min_val_loss = float('inf')
     for epoch in range(1, EPOCH_NUMBER + 1):
         epoch_loss = 0.0
         for data_, target_ in train_loader:
@@ -134,21 +135,36 @@ def main():
         # TODO: Add validation Loop here
         #################################
         # Your Code
+        val_loss = 0.0
+        with torch.no_grad():
+            for data_, target_ in validation_loader:
+                target_ = target_.to(device)
+                data_ = data_.to(device)
+                
+                outputs = model(data_)
+                loss = criterion(outputs, target_)
+                val_loss += loss.item()
+        avg_val_loss = val_loss / len(validation_loader)
         #################################
 
         # Append result to the lists for each epoch
         ##############################################################################
         TRAIN_LOSS.append(epoch_loss/len(train_loader))
-        print(f"Epoch {epoch}, Training Loss: {epoch_loss/len(train_loader)}")
+        VALIDATION_LOSS.append(avg_val_loss)
+        print(f"Epoch {epoch}, Training Loss: {epoch_loss/len(train_loader)}, Validation Loss: {avg_val_loss}")
         # TODO: Append validation results to the lists for each epoch
         # Your Code
         ##############################################################################
 
-
     # Save the model
-    # TODO: Instead save the model here,
-    # TODO: you should save the model with the minimal validation loss
-    torch.save(model.state_dict(), "model.pt")
+        # torch.save(model.state_dict(), f"model_{epoch}.pt")
+
+        # TODO: Instead save the model here,
+        # TODO: you should save the model with the minimal validation loss
+        if (avg_val_loss < min_val_loss):
+            min_val_loss = avg_val_loss
+            torch.save(model.state_dict(), f"opt_model.pt")
+
 
 
     # TODO: Plot the training loss and validation loss in the same graph
@@ -156,9 +172,11 @@ def main():
     # Your Code
     plt.subplots(figsize=(6, 4))
     plt.plot(range(EPOCH_NUMBER), TRAIN_LOSS, color="blue", label="Training Set")
+    plt.plot(range(EPOCH_NUMBER), VALIDATION_LOSS, color='red', label="Validation Set")
     plt.legend()
     plt.xlabel("Number of Epochs")
     plt.ylabel("Loss")
+    plt.savefig("Training Curve.png", dpi=300)
     plt.show()
     #################################################################################
 
