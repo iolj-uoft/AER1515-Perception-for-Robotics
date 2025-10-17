@@ -3,7 +3,7 @@ import torchvision.transforms as transforms
 
 transform_train = transforms.Compose([
     transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomRotation(degrees=15),
+    transforms.RandomRotation(degrees=10),
     transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.02),
     transforms.ToTensor(),
 ])
@@ -23,7 +23,7 @@ class AnimalDataset():
         self.img_paths = img_paths
         self.img_labels = img_labels
         self.size_of_images = size_of_images
-        self.transform = transform_train if split == "train" else transform
+        self.transform = transform_train if split == "train" else transform_train
         if len(self.img_paths) != len(self.img_labels):
             raise InvalidDatasetException(self.img_paths, self.img_labels)
 

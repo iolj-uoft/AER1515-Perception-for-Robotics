@@ -38,9 +38,8 @@ def main():
             paths.append(each_file)
             labels.append(i)
     dataset = AnimalDataset(paths, labels, (150, 150))
-
     dataset_indices = list(range(0, len(dataset)))
-    test_loader = torch.utils.data.DataLoader(dataset, batch_size=1)
+    test_loader = torch.utils.data.DataLoader(dataset, batch_size=32)
     print("Number of test samples: ", len(dataset_indices))
     #########################################################################################################
 
