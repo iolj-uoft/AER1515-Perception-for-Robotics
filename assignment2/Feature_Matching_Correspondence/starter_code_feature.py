@@ -3,6 +3,7 @@ import cv2 as cv
 from matplotlib import pyplot as plt
 import csv
 import os
+from tools.R2D2 import R2D2
 
 class FrameCalib:
     """Frame Calibration
@@ -207,8 +208,17 @@ for sample_name in sample_list:
     img_left = cv.imread(left_image_path, 0)
     img_right = cv.imread(right_image_path, 0)
 
-    # TODO: Initialize a feature detector
-
+    # Initialize a feature detector
+    # Inference the R2D2 feature detector and extract keypoints, descriptors, and reliability scores
+    R2D2_left = R2D2(left_image_path)
+    R2D2_right = R2D2(right_image_path)
+    
+    R2D2_left.inference()
+    R2D2_right.inference()
+    
+    left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
+    right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
+    
     # TODO: Perform feature matching
 
     # TODO: Perform outlier rejection
@@ -222,18 +232,19 @@ for sample_name in sample_list:
     pixel_v_list = [] # y pixel on left image
     disparity_list = []
     depth_list = []
-    for i, match in enumerate(matches):
-      	pass
+    # for i, match in enumerate(matches):
+      	# pass
 
     # Output
-    for u, v, disp, depth in zip(pixel_u_list, pixel_v_list, disparity_list, depth_list):
-        line = "{} {:.2f} {:.2f} {:.2f} {:.2f}".format(sample_name, u, v, disp, depth)
-        output_file.write(line + '\n')
+    # for u, v, disp, depth in zip(pixel_u_list, pixel_v_list, disparity_list, depth_list):
+    #     line = "{} {:.2f} {:.2f} {:.2f} {:.2f}".format(sample_name, u, v, disp, depth)
+    #     output_file.write(line + '\n')
+    
 
     # Draw matches
-    img = cv.drawMatches(img_left, kp_left, img_right, kp_right, matches, None, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-    plt.imshow(img)
-    plt.show()
+    # img = cv.drawMatches(img_left, kp_left, img_right, kp_right, matches, None, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+    # plt.imshow(img)
+    # plt.show()
 
 output_file.close()
 

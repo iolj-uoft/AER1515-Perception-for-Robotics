@@ -18,3 +18,5 @@ __pycache__/
 *.synctex.gz
 _minted-*/
 *.nlo
+
+*.r2d2

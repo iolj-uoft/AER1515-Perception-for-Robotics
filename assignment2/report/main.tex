@@ -6,6 +6,8 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{minted}
+\usepackage{hyperref}
+
 \title{file title} %title of the file
 
 \definecolor{codegreen}{rgb}{0,0.6,0}
@@ -37,7 +39,6 @@
 \begin{document}
 
 %----------- Report information ---------
-
 \logo{logos/uoft_logo.png}
 \uni{\textbf{University of Toronto}}
 \ttitle{AER1515 Perception for Robotics: Assignment 1} %title of the file
@@ -55,126 +56,62 @@
 %------------ Report body ----------------
 
 \section{Answers}
-\subsection{Question 1: Extending to Multi-Class Classification}
-\subsubsection{Training Loss for Binary Classification}
+\subsection{Question 1: Feature Point Detection and Corresondences}
+\subsubsection{Feature Detection}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{images/Q1.1.png}
-    \caption{Traning Loss Curve for 40 Epochs}
+    \includegraphics[width=\textwidth]{images/Q1.1.1.png}
+    \caption{Detected keypoints of left-test-images by the R2D2 framework (unified circle radius)}
     \label{fig:1}
 \end{figure}
 
-\subsubsection{Test Accuracy}
-The returned accuracy from test.py is at 80\% after 40 epochs.
-
-\subsubsection{Training Loss and Test Accuracy for Multi-Class Classification}
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{images/Q1.2.png}
-    \caption{Traning Loss Curve for 40 Epochs}
+    \includegraphics[width=\textwidth]{images/Q1.1.2.png}
+    \caption{Detected keypoints of left-test-images by the R2D2 framework (unified circle radius)}
     \label{fig:2}
 \end{figure}
-And the test accuracy is at 68\% after training for 40 epochs for multi-class classification using the unmodified CNN.
 
-\subsection{Question 2: Modifying the CNN Architecture}
-\subsubsection{Training Loss and Test Accuracy after adding Batch-Normalization}
+I utilized the R2D2 framework as the feature detection algorithm. 
+From Fig.~\ref{fig:1} and Fig.~\ref{fig:2}, it can be observed that most keypoints are 
+concentrated around visually distinctive regions of the image, such as object boundaries, 
+textured surfaces, and high-contrast areas. The clustering of keypoints occurs because R2D2 
+detects features across multiple scales, which can lead to overlapping detections when strong 
+structures are present at several pyramid levels. In the following plots, the radius of 
+each circle represents the detected scale of the corresponding keypoint, illustrating the multi-scale 
+nature of the detector.
+
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{images/Q2.1.png}
-    \caption{Training Loss Curve of adding a batch-normalization layer after the second convolution layer}
+    \includegraphics[width=\textwidth]{images/Q1.1.1_scaled.png}
+    \caption{30 keypoints with scaled radius}
     \label{fig:3}
 \end{figure}
-The returned test accuracy is 77\%, improving from the baseline of 68\%. Several configurations of Batch Normalization were tested, and the optimal performance was achieved when a single BN layer was added after the second convolution layer and before the ReLU activation function. Other placements (e.g., after ReLU or in deeper layers) produced inferior results. This improvement suggests that normalizing early feature maps helps stabilize learning and maintain consistent activation scales throughout the network. Moreover, Batch Normalization accelerates convergence (as seen from the training curve) by smoothing the optimization landscape, allowing the network to learn effectively with more stable gradient updates.
-
-\subsubsection{Training Loss and Test Accuracy after adding Dropout Layers}
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{images/Q2.2.png}
-    \caption{Training Loss Curve of Additional Dropout Layers}
+    \includegraphics[width=\textwidth]{images/Q1.1.2_scaled.png}
+    \caption{30 keypoints with scaled radius}
     \label{fig:4}
 \end{figure}
-After adding dropout after the ReLU activation of the fourth convolution layer and the first fully connected layer, the test accuracy decreased slightly to 75\%, which is expected. Dropout randomly disables a subset of neurons during training, forcing the network to explore more representations rather than relying on specific activations. While this helps reduce overfitting, it can also lower performance when the dataset is not large enough or when the model is already well-regularized (as in our case, after adding batch normalization). Therefore, dropout introduced a mild underfitting effect, which is consistent with its purpose as a regularization technique.
 
-\subsection{Question 3: Training with Validation and Data Augmentation}
-\subsubsection{Training Plot with Validation Loss}
+The radius of each green circle represents the scale predicted by R2D2 for that keypoint, corresponding to the 
+size of the image region that contributes to its descriptor. Larger circles indicate coarse-scale features 
+that remain stable across viewpoint and blur changes, while smaller circles 
+correspond to fine-scale texture details. The variation in circle sizes illustrates the multi-scale nature of 
+the detector, allowing robust matching across different levels of zoom and scene detail.
+Since the R2D2 framework natively provide "scores" for each keypoint, it's easy to identify which keypoints
+are less reliable when we perform image matching in the later steps. 
+
 \begin{figure}[H]
     \centering
-    \includegraphics[width=\textwidth]{images/Q3.1.png}
-    \caption{Training and Validation Loss Curve}
+    \includegraphics[width=\textwidth]{images/Q1.1.1_viz.png}
+    \caption{For one given input image (1st row), the repeatability (2nd row) and reliability
+heatmaps (3rd row) extracted at a single scale. Top-scoring keypoints are shown as
+    green crosses in the first image. (Plot generated by visualization script from the original repository: \href{https://github.com/naver/r2d2}{R2D2}.)}
     \label{fig:5}
 \end{figure}
-The accuracy using the model with the lowest validation loss is 72\%, which has a 3\% decrease. There are several reasons that could lead to this result:
-\begin{itemize}
-    \item \textbf{Random variation between validation and test splits:} Since the data splitting operation is random, each split may contain slightly different examples, where some may be easier and some may be more complicated.
-    \item \textbf{Underfitting due to early stop:} Selecting the weights from the epoch with lowest validation loss could let the model has lower generalization capabilities. i.e., The model will prioritize the model fit to a specific validation data split.
-\end{itemize}
 
-\subsubsection{Training Plot with Validation Loss After Data Augmentation}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/Q3.2.png}
-    \caption{Training and Validation Loss Curve with Data Augmentation}
-    \label{fig:6}
-\end{figure}
+\subsubsection{Feature Matching}
 
-I performed three data augmentation techniques, including random horizontal flip, rotation, and color jitter. The test accuracy after augmentation is at 80\%, which has an 8\% increase compared to the vanilla datasets. From the plot, we can see that performing augmentation reduced overfitting, as the validation loss isn't at a plateau; instead, it keeps decreasing during the 40 epochs. The reason why data augmentation works is because it introducess controllable noise into the training data. Hence, it increases the model's performance on generalization. However, performing excessive augmentation will lead to an accuracy drop, so the parameters of image transformations need to be tuned.
-\begin{minted}{python}
-transform_train = transforms.Compose([
-    transforms.RandomHorizontalFlip(p=0.5),
-    transforms.RandomRotation(degrees=15),
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.02),
-    transforms.ToTensor(),
-])
-\end{minted}
-
-\subsection{Question 4: Hyperparameter Tuning}
-\subsubsection{Changing Optimizer}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/Q4.1.png}
-    \caption{Training and Validation Loss Curve with AdamW Optimizer}
-    \label{fig:7}
-\end{figure}
-The test accuracy after swapping the optimizer from RMSProp to AdamW is identical at 80\%.
-
-\subsubsection{Tuning Learning Rate}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/Q4.2.png}
-    \caption{Training and Validation Loss Curve with Different Learning Rates}
-    \label{fig:8}
-\end{figure}
-The test results for different learning rates are as follows:
-\begin{itemize}
-    \item \textbf{lr = 0.001: }73\%
-    \item \textbf{lr = 0.0001: }78\%
-    \item \textbf{lr = 0.0005: }78\%
-    \item \textbf{lr = 0.00005: }65\%
-\end{itemize}
-From the figure above, we can observe that as the learning rate decreases, the training curve becomes less volatile. This is because the learning rate determines the step size — how far the optimizer moves in the direction of the gradient at each iteration. When the learning rate is too high, the optimizer may overshoot the local or global minimum, causing oscillations or divergence in the loss curve. Meanwhile, a smaller learning rate will result in smoother convergence, but it'll require more epochs to get to the minimum.
-
-\subsubsection{Tuning Batch Size}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/Q4.3.png}
-    \caption{Training and Validation Loss Curve with Different Batch Sizes}
-    \label{fig:9}
-\end{figure}
-From the figure above, we can see that as the batch size increases, both training and validation losses become smoother due to more stable gradient estimates. However, the test accuracy consistently decreases—from 75\% (batch size 16) to 62\% (batch size 128). This indicates that with a small batch size, the gradient updates are noisier, which acts as a form of implicit regularization and helps the optimizer escape sharp minima in the loss landscape. In contrast, larger batches provide more accurate gradient estimates but tend to converge to sharper minima, leading to poorer generalization. (Note: the test accuracy is tested with the parameters that have the lowest validation loss)
-
-\subsubsection{Hyperparameter Tuning}
-\begin{figure}[H]
-    \centering
-    \includegraphics[width=\textwidth]{images/Q4.4_downsized.png}
-    \caption{Hyperparameter Tuning}
-    \label{fig:10}
-\end{figure}
-I implemented 27 combinations of hyperparameters to get the best test accuracy. The list of selected hyperparameters is as follows:
-\begin{itemize}
-    \item Optimizer: AdamW, Adam, RMSProp
-    \item Learning Rate: 0.0001, 0.00025, 0.0005
-    \item Batch Size: 16, 32, 64
-\end{itemize}
-And the best performing hyperparameter combination achieved an 81\% test accuracy by using the AdamW optimizer with no weight decay, 32 as the batch size, and 0.00025 as the learning rate. 
 \end{document}
