@@ -6,6 +6,7 @@
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{minted}
+\usepackage{amsmath, amssymb, amsfonts}
 \usepackage{hyperref}
 \hypersetup{
     colorlinks=true,        % Enable colored links
@@ -48,9 +49,9 @@
 %----------- Report information ---------
 \logo{logos/uoft_logo.png}
 \uni{\textbf{University of Toronto}}
-\ttitle{AER1515 Perception for Robotics: Assignment 1} %title of the file
+\ttitle{AER1515 Perception for Robotics: Assignment 2} %title of the file
 \subject{AER1515} % Subject name
-\topic{Assignment 1} % Topic name
+\topic{Assignment 2} % Topic name
 
 \students{\textsc{Yang-Chen Lin}} % information related to the students
 
@@ -120,5 +121,72 @@ heatmaps (3rd row) extracted at a single scale. Top-scoring keypoints are shown 
 \end{figure}
 
 \subsubsection{Feature Matching}
+
+The feature matching pipeline used in this assignment is implemented across three scripts in the repository:
+	\texttt{tools/R2D2.py}, \texttt{tools/matcher.py}, and \texttt{starter\_code\_feature.py}. The following summarizes the
+implementation, parameters, and the filtering rules applied during matching and depth computation.
+
+\paragraph{Overview}
+\begin{itemize}
+    \item \texttt{tools/R2D2.py} performs feature detection and descriptor extraction using the R2D2 model. It produces
+        per-image files containing \texttt{keypoints} (pixel coordinates and scale), \texttt{descriptors} (128-d vectors), and
+        \texttt{scores} (reliability values).
+    \item \texttt{tools/matcher.py} implements brute-force L2 nearest-neighbour matching with Lowe's ratio test and simple
+        geometric constraints (vertical epipolar tolerance and disparity sign).
+    \item \texttt{starter\_code\_feature.py} orchestrates extraction and matching, computes disparity and depth using the
+        stereo calibration, applies conservative filtering, writes the sparse depth predictions to \texttt{P3\_result.txt}, and
+        generates diagnostic visualizations.
+\end{itemize}
+
+\paragraph{Feature extraction (\texttt{tools/R2D2.py})}
+The R2D2 extractor is invoked (via \texttt{r2d2/extract.py}) to produce a sidecar \texttt{.r2d2} file per image. Each
+file stores arrays loaded with NumPy:
+$ \text{keypoints}\in\mathbb{R}^{N\times 3},\quad\text{descriptors}\in\mathbb{R}^{N\times 128},\quad\text{scores}\in\mathbb{R}^N.$
+Keypoints are in pixel coordinates $(u,v)$ and include a scale value.
+
+\paragraph{Descriptor matching (\texttt{tools/matcher.py})}
+Let $L$ denote left descriptors and $R$ denote right descriptors. Matching proceeds as follows:
+\begin{enumerate}
+    \item Compute the pairwise L2 distance matrix $D\in\mathbb{R}^{|L|\times|R|}$ with entries $D_{ij}=\lVert d^L_i-d^R_j\rVert_2$.
+    \item For each left descriptor find the nearest and second-nearest right descriptors ($j_1, j_2$) and associated distances
+        $d_0=D_{i,j_1}$ and $d_1=D_{i,j_2}$.
+    \item Apply Lowe's ratio test and a distance threshold:
+        \[\text{ratio\_mask}_i = (d_0/d_1 < \tau_{\mathrm{ratio}}) \;\wedge\; (d_0 \le \tau_{\mathrm{dist}}).\]
+        Default code parameters: $\tau_{\mathrm{ratio}}=0.9$, $\tau_{\mathrm{dist}}=5.0$.
+    \item Enforce an epipolar (vertical) constraint: $|v^L_i - v^R_{j_1}| < \epsilon_y$ with $\epsilon_y=2$.
+    \item Require positive disparity (filter out negative disparities): $u^R_{j_1} < u^L_i$.
+    \item The final mask is the conjunction of the ratio, epipolar and disparity masks; matches and their descriptor distances
+        are returned as arrays for downstream processing.
+\end{enumerate}
+
+\paragraph{Disparity and depth (\texttt{starter\_code\_feature.py})}
+For each accepted match (left index $i$, right index $j$) the pixel coordinates are extracted and disparity is computed as
+\[\text{disparity} = u_L - u_R.\]
+Depth is then estimated from stereo geometry via
+\[ z = \frac{f\cdot B}{\text{disparity}},\]
+where $f$ is the focal length and $B$ is the baseline obtained by factorizing the projection matrices
+(see \texttt{krt\_from\_p} and \texttt{get\_stereo\_calibration}).
+
+\paragraph{Filtering rules}
+To avoid invalid or very noisy depth estimates, the implementation applies conservative filters:
+\begin{itemize}
+    \item Skip matches with disparity $\le 0.1$ (prevents division by zero and ignores extremely small disparities).
+    \item Discard depths $z>80\,$m or $z<0$ (long-range predictions are unreliable for evaluation).
+\end{itemize}
+
+\paragraph{Output and visualization}
+Filtered sparse depth predictions are written to \texttt{P3\_result.txt} with the format
+	\texttt{image\_id u v disparity depth}. Diagnostic visualizations are created using OpenCV's \texttt{cv.drawMatches}
+and stacked figures (one row per sample) are produced and saved with tight bounding boxes to minimize whitespace.
+
+\vspace{2mm}
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{images/Q1.2.1.png}
+        \caption{Feature matching on the test images using brute-force and epipolar constraints.}
+        \label{fig:6}
+\end{figure}
+
 
 \end{document}

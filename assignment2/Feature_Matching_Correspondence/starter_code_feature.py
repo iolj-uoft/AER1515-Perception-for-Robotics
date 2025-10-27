@@ -4,7 +4,8 @@ from matplotlib import pyplot as plt
 import csv
 import os
 from tools.R2D2 import R2D2
-from tools.matcher import Matcher
+from tools.matcher import FeatureMatcher
+import argparse
 
 class FrameCalib:
     """Frame Calibration
@@ -13,7 +14,7 @@ class FrameCalib:
         p0-p3: (3, 4) Camera P matrices. Contains extrinsic and intrinsic parameters.
         r0_rect: (3, 3) Rectification matrix
         velo_to_cam: (3, 4) Transformation matrix from velodyne to cam coordinate
-            Point_Camera = P_cam * R0_rect * Tr_velo_to_cam * Point_Velodyne
+        Point_Camera = P_cam * R0_rect * Tr_velo_to_cam * Point_Velodyne
         """
 
     def __init__(self):
@@ -189,107 +190,152 @@ def get_stereo_calibration(left_cam_mat, right_cam_mat):
 
     return stereo_calib
 
-
-## Input
-left_image_dir = os.path.abspath('./training/left')
-right_image_dir = os.path.abspath('./training/right')
-calib_dir = os.path.abspath('./training/calib')
-sample_list = ['000001', '000002', '000003', '000004','000005', '000006', '000007', '000008', '000009', '000010']
-
-## Output
-output_file = open("P3_result.txt", "a")
-output_file.truncate(0)
-
-
-## Main
-for sample_name in sample_list:
-    left_image_path = left_image_dir +'/' + sample_name + '.png'
-    right_image_path = right_image_dir +'/' + sample_name + '.png'
-
-    img_left = cv.imread(left_image_path, 0)
-    img_right = cv.imread(right_image_path, 0)
-
-    # Initialize a feature detector
-    # Inference the R2D2 feature detector and extract keypoints, descriptors, and reliability scores
-    R2D2_left = R2D2(left_image_path)
-    R2D2_right = R2D2(right_image_path)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--test", type=int, default=0, required=True, help="Select True to perform matching on test dataset.")
+    parser.add_argument("--plot", type=int, default=0)
+    args = parser.parse_args()
     
-    R2D2_left.inference()
-    R2D2_right.inference()
+    ## Input
+    if (args.test == 1):
+        left_image_dir = os.path.abspath('./test/left')
+        right_image_dir = os.path.abspath('./test/right')
+        calib_dir = os.path.abspath('./test/calib')
+        sample_list = ['000011', '000012', '000013', '000014','000015']
+    else: 
+        left_image_dir = os.path.abspath('./training/left')
+        right_image_dir = os.path.abspath('./training/right')
+        calib_dir = os.path.abspath('./training/calib')
+        sample_list = ['000001', '000002', '000003', '000004','000005', '000006', '000007', '000008', '000009', '000010']
+
+    ## Output
+    output_file = open("P3_result.txt", "a")
+    output_file.truncate(0)
+
+
+    ## Main
+    # Prepare a figure and axes for stacking plots vertically (one row per sample)
+    if args.plot == 1:
+        # Create one axis per sample; we'll fill them inside the loop.
+        fig, axes = plt.subplots(len(sample_list), 1, figsize=(8, 2 * len(sample_list)))
+        # Ensure axes is always indexable as a list
+        if len(sample_list) == 1:
+            axes = [axes]
+
+    for sample_name in sample_list:
+        left_image_path = left_image_dir +'/' + sample_name + '.png'
+        right_image_path = right_image_dir +'/' + sample_name + '.png'
+
+        img_left = cv.imread(left_image_path, 0)
+        img_right = cv.imread(right_image_path, 0)
+
+        # Initialize a feature detector
+        # Inference the R2D2 feature detector and extract keypoints, descriptors, and reliability scores
+        R2D2_left = R2D2(left_image_path)
+        R2D2_right = R2D2(right_image_path)
+        
+        R2D2_left.inference()
+        R2D2_right.inference()
+        
+        left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
+        right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
+        
+        # Perform feature matching
+        Matcher = FeatureMatcher(left_image_keypoints, left_image_descriptor, left_image_scores,
+                        right_image_keypoints, right_image_descriptor, right_image_scores)
+        
+        matches, descriptor_distances = Matcher.epipolar_matching()
+
+        # Handles matches as cv2.DMatch or as list/array of (left_idx, right_idx) pairs.
+        def _to_keypoints(kps):
+            if len(kps) == 0:
+                return []
+            if hasattr(kps[0], 'pt'):
+                return kps
+            return [cv.KeyPoint(float(p[0]), float(p[1]), 1) for p in kps]
+
+        kp_left = _to_keypoints(left_image_keypoints)
+        kp_right = _to_keypoints(right_image_keypoints)
+
+        # TODO: Perform outlier rejection
+
+        # Read calibration
+        calib_path = calib_dir +'/' + sample_name + '.txt'
+        frame_calib = read_frame_calib(calib_path)
+        stereo_calib = get_stereo_calibration(frame_calib.p2, frame_calib.p3)
+
+        # Find disparity and depth
+        pixel_u_list = [] # x pixel on left image
+        pixel_v_list = [] # y pixel on left image
+        disparity_list = []
+        depth_list = []
+        cv_Dmatches = []
+        
+        for i, match in enumerate(matches):
+            matched_left_img_idx = match[0]
+            matched_right_img_idx = match[1]
+            
+            u_L = left_image_keypoints[matched_left_img_idx][0]
+            v_L = left_image_keypoints[matched_left_img_idx][1]
+            u_R = right_image_keypoints[matched_right_img_idx][0]
+            v_R = right_image_keypoints[matched_right_img_idx][1]
+            
+            disparity = u_L - u_R
+            if disparity <= 0.1: # avoid divide by 0
+                continue
+            
+            depth = stereo_calib.f * (stereo_calib.baseline) / disparity
+            
+            # Filter out depths over 80 meters
+            if depth > 80 or depth < 0:
+                continue
+            
+            pixel_u_list.append(u_L)
+            pixel_v_list.append(v_L)
+            disparity_list.append(disparity)
+            depth_list.append(depth)    
+
+        # Output
+        for u, v, disp, depth in zip(pixel_u_list, pixel_v_list, disparity_list, depth_list):
+            line = "{} {:.2f} {:.2f} {:.2f} {:.2f}".format(sample_name, u, v, disp, depth)
+            output_file.write(line + '\n')
+        
+        for i, match in enumerate(matches):
+            try:
+                lidx = int(match[0])  # Left image keypoint index
+                ridx = int(match[1])  # Right image keypoint index
+            except Exception:
+                continue
+            dist = float(descriptor_distances[i]) if (descriptor_distances is not None and i < len(descriptor_distances)) else 0.0
+            cv_Dmatches.append(cv.DMatch(_queryIdx=lidx, _trainIdx=ridx, _imgIdx=0, _distance=dist))
+        
+        # Draw matches
+        if args.plot == 1:
+            # Use RGB images for the plot
+            img_left_color = cv.imread(left_image_path)
+            img_right_color = cv.imread(right_image_path)
+            img_left_color = cv.cvtColor(img_left_color, cv.COLOR_BGR2RGB)
+            img_right_color = cv.cvtColor(img_right_color, cv.COLOR_BGR2RGB)
+
+            # Draw matches on RGB images
+            img = cv.drawMatches(img_left_color, kp_left, img_right_color, kp_right, cv_Dmatches, None, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+
+            # Place this image into the pre-created axis so we control spacing precisely
+            idx = sample_list.index(sample_name)
+            ax = axes[idx]
+            ax.imshow(img, aspect='auto')
+            ax.axis('off')
+            # Small title with minimal padding to reduce vertical gaps
+            ax.set_title(f"Sample: {sample_name}", pad=2, fontsize=9)
     
-    left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
-    right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
-    epipolar_Matcher = Matcher(left_image_keypoints, left_image_descriptor, left_image_scores,
-                      right_image_keypoints, right_image_descriptor, right_image_scores)
-    
-    matches, distances = epipolar_Matcher.epipolar_matching()
-    print(matches)
-    # Quick visualization of matches
-    # Handles matches as cv2.DMatch or as list/array of (left_idx, right_idx) pairs.
-    def _to_keypoints(kps):
-        if len(kps) == 0:
-            return []
-        if hasattr(kps[0], 'pt'):
-            return kps
-        return [cv.KeyPoint(float(p[0]), float(p[1]), 1) for p in kps]
-
-    kp_left = _to_keypoints(left_image_keypoints)
-    kp_right = _to_keypoints(right_image_keypoints)
-
-    # Build cv2.DMatch list if needed
-    dmatches = []
-    if len(matches) > 0:
-        first = matches[0]
-        if hasattr(first, 'queryIdx') and hasattr(first, 'trainIdx'):
-            dmatches = matches
-        else:
-            for i, m in enumerate(matches):
-                try:
-                    lidx = int(m[0]); ridx = int(m[1])
-                except Exception:
-                    continue
-                dist = float(distances[i]) if (distances is not None and i < len(distances)) else 0.0
-                dmatches.append(cv.DMatch(_queryIdx=lidx, _trainIdx=ridx, _imgIdx=0, _distance=dist))
-
-    if len(dmatches) == 0:
-        print("No matches to display.")
-    else:
-        vis = cv.drawMatches(img_left, kp_left, img_right, kp_right, dmatches, None,
-                             flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-        plt.figure(figsize=(12, 6))
-        if vis.ndim == 2:
-            plt.imshow(vis, cmap='gray')
-        else:
-            plt.imshow(cv.cvtColor(vis, cv.COLOR_BGR2RGB))
-        plt.axis('off')
+    if args.plot == 1:
+        # Reduce vertical gaps and trim figure margins tightly on save
+        plt.subplots_adjust(hspace=0.02, top=0.99, bottom=0.01)
+        plt.tight_layout()
+        out_path = "stacked_matches_vertical.png"
+        fig.savefig(out_path, dpi=300, bbox_inches='tight', pad_inches=0)
+        print(f"Saved {out_path}")
         plt.show()
-    
-    # TODO: Perform feature matching
 
-    # TODO: Perform outlier rejection
-
-    # Read calibration
-    frame_calib = None
-    stereo_calib = None
-
-    # Find disparity and depth
-    pixel_u_list = [] # x pixel on left image
-    pixel_v_list = [] # y pixel on left image
-    disparity_list = []
-    depth_list = []
-    # for i, match in enumerate(matches):
-      	# pass
-
-    # Output
-    # for u, v, disp, depth in zip(pixel_u_list, pixel_v_list, disparity_list, depth_list):
-    #     line = "{} {:.2f} {:.2f} {:.2f} {:.2f}".format(sample_name, u, v, disp, depth)
-    #     output_file.write(line + '\n')
-    
-
-    # Draw matches
-    # img = cv.drawMatches(img_left, kp_left, img_right, kp_right, matches, None, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-    # plt.imshow(img)
-    # plt.show()
-
-output_file.close()
+    output_file.close()
 

@@ -37,7 +37,7 @@
 \lhead{\includegraphics[scale=0.3]{logos/UTIAS_logo.png}}
 \rhead{\nouppercase{\leftmark}}
 \rfoot{\thepage}
-\cfoot{\textbf{Assignment 1}}
+\cfoot{\textbf{Assignment 2}}
 \lfoot{\subject}
 }
 
