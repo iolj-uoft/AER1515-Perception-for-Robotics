@@ -4,6 +4,7 @@ from matplotlib import pyplot as plt
 import csv
 import os
 from tools.R2D2 import R2D2
+from tools.matcher import Matcher
 
 class FrameCalib:
     """Frame Calibration
@@ -216,26 +217,11 @@ for sample_name in sample_list:
     R2D2_left.inference()
     R2D2_right.inference()
     
-    left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
-    right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
-    
-    left_image_keypoints_cv = [cv.KeyPoint(x=float(x), y=float(y), size=float(s)) for x, y, s in left_image_keypoints]
-    right_image_keypoints_cv = [cv.KeyPoint(x=float(x), y=float(y), size=float(s)) for x, y, s in right_image_keypoints]
+    Matcher = Matcher(R2D2_left.load_data(), R2D2_right.load_data())
+    Matcher.epipolar_matching()
     
     # TODO: Perform feature matching
-    matcher = cv.DescriptorMatcher_create(cv.DescriptorMatcher_FLANNBASED)
-    knn_matches = matcher.knnMatch(left_image_descriptor, right_image_descriptor, 2)
-    ratio_thresh = 0.8  # Threshold for Lowe's ratio test
-    good_matches = []
-    for m, n in knn_matches:
-        if m.distance < ratio_thresh * n.distance:
-            good_matches.append(m)
-            
-    img_matches = np.empty((max(img_left.shape[0], img_right.shape[0]), img_left.shape[1] + img_right.shape[1], 3), dtype=np.uint8)
-    cv.drawMatches(img_left, left_image_keypoints_cv, img_right, right_image_keypoints_cv, good_matches, img_matches, flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
-    
-    cv.imshow("Matched Image", img_matches)
-    cv.waitKey(0)
+
     # TODO: Perform outlier rejection
 
     # Read calibration

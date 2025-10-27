@@ -6,7 +6,7 @@ import subprocess
 import numpy as np
 
 class R2D2:
-    def __init__(self, image_path):
+    def __init__(self, image_path: str):
         self.image_path = image_path
         
     def inference(self):

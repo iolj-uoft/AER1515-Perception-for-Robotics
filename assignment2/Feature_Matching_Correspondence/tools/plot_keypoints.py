@@ -1,7 +1,7 @@
 from matplotlib import pyplot as plt
 import cv2 as cv
 import os
-import load_r2d2
+from R2D2 import R2D2
 
 image_folder_path = 'test/left'
 images = []
@@ -11,6 +11,7 @@ reliability_scores = []
 for filename in os.listdir(image_folder_path):
     if filename.endswith('.png'):
         img_path = os.path.join(image_folder_path, filename)
+        R2D2_obj = R2D2(img_path)
         img = cv.imread(img_path)
         # cv.imshow(f"{filename}", img)
         # cv.waitKey(0)
@@ -23,10 +24,10 @@ for filename in os.listdir(image_folder_path):
         
         if not os.path.exists(r2d2_path):
             print(f"No corresponding .r2d2 file found for {filename}")
-            continue
-        
-        keypoints, descriptors, scores = load_r2d2.main(img_path)
+
+        keypoints, descriptors, scores = R2D2_obj.load_data()
         reliability_scores.append(scores)
+        print(descriptors.shape)
         
         # Convert keypoints to cv2.KeyPoint objects
         keypoints_cv = [cv.KeyPoint(x=float(x), y=float(y), size=float(s)) for x, y, s in keypoints]
