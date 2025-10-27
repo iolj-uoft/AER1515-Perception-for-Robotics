@@ -217,8 +217,52 @@ for sample_name in sample_list:
     R2D2_left.inference()
     R2D2_right.inference()
     
-    Matcher = Matcher(R2D2_left.load_data(), R2D2_right.load_data())
-    Matcher.epipolar_matching()
+    left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
+    right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
+    epipolar_Matcher = Matcher(left_image_keypoints, left_image_descriptor, left_image_scores,
+                      right_image_keypoints, right_image_descriptor, right_image_scores)
+    
+    matches, distances = epipolar_Matcher.epipolar_matching()
+    print(matches)
+    # Quick visualization of matches
+    # Handles matches as cv2.DMatch or as list/array of (left_idx, right_idx) pairs.
+    def _to_keypoints(kps):
+        if len(kps) == 0:
+            return []
+        if hasattr(kps[0], 'pt'):
+            return kps
+        return [cv.KeyPoint(float(p[0]), float(p[1]), 1) for p in kps]
+
+    kp_left = _to_keypoints(left_image_keypoints)
+    kp_right = _to_keypoints(right_image_keypoints)
+
+    # Build cv2.DMatch list if needed
+    dmatches = []
+    if len(matches) > 0:
+        first = matches[0]
+        if hasattr(first, 'queryIdx') and hasattr(first, 'trainIdx'):
+            dmatches = matches
+        else:
+            for i, m in enumerate(matches):
+                try:
+                    lidx = int(m[0]); ridx = int(m[1])
+                except Exception:
+                    continue
+                dist = float(distances[i]) if (distances is not None and i < len(distances)) else 0.0
+                dmatches.append(cv.DMatch(_queryIdx=lidx, _trainIdx=ridx, _imgIdx=0, _distance=dist))
+
+    if len(dmatches) == 0:
+        print("No matches to display.")
+    else:
+        vis = cv.drawMatches(img_left, kp_left, img_right, kp_right, dmatches, None,
+                             flags=cv.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
+        plt.figure(figsize=(12, 6))
+        if vis.ndim == 2:
+            plt.imshow(vis, cmap='gray')
+        else:
+            plt.imshow(cv.cvtColor(vis, cv.COLOR_BGR2RGB))
+        plt.axis('off')
+        plt.show()
     
     # TODO: Perform feature matching
 
