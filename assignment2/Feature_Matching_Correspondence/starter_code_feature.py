@@ -3,9 +3,10 @@ import cv2 as cv
 from matplotlib import pyplot as plt
 import csv
 import os
+import argparse
 from tools.R2D2 import R2D2
 from tools.matcher import FeatureMatcher
-import argparse
+import tools.superglue
 
 class FrameCalib:
     """Frame Calibration
@@ -194,6 +195,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", type=int, default=0, required=True, help="Select True to perform matching on test dataset.")
     parser.add_argument("--plot", type=int, default=0)
+    parser.add_argument("--outlier-rejection", type=str, default="RANSAC", choices=["RANSAC", "epipolar"], required=True, help="Select Matching Algorithm.")
+    parser.add_argument("--feature-extractor", type=str, default="R2D2", choices=["R2D2", "ORB", "SuperGlue"], 
+                        help="Select feature extractor: R2D2 or ORB.")
     args = parser.parse_args()
     
     ## Input
@@ -215,7 +219,7 @@ if __name__ == "__main__":
 
     ## Main
     # Prepare a figure and axes for stacking plots vertically (one row per sample)
-    if args.plot == 1:
+    if (args.plot == 1):
         # Create one axis per sample; we'll fill them inside the loop.
         fig, axes = plt.subplots(len(sample_list), 1, figsize=(8, 2 * len(sample_list)))
         # Ensure axes is always indexable as a list
@@ -231,21 +235,57 @@ if __name__ == "__main__":
 
         # Initialize a feature detector
         # Inference the R2D2 feature detector and extract keypoints, descriptors, and reliability scores
-        R2D2_left = R2D2(left_image_path)
-        R2D2_right = R2D2(right_image_path)
-        
-        R2D2_left.inference()
-        R2D2_right.inference()
-        
-        left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
-        right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
-        
-        # Perform feature matching
-        Matcher = FeatureMatcher(left_image_keypoints, left_image_descriptor, left_image_scores,
-                        right_image_keypoints, right_image_descriptor, right_image_scores)
-        
-        matches, descriptor_distances = Matcher.epipolar_matching()
+        if (args.feature_extractor == "R2D2"):
+            R2D2_left = R2D2(left_image_path)
+            R2D2_right = R2D2(right_image_path)
+            
+            R2D2_left.inference()
+            R2D2_right.inference()
+            
+            left_image_keypoints, left_image_descriptor, left_image_scores = R2D2_left.load_data()
+            right_image_keypoints, right_image_descriptor, right_image_scores = R2D2_right.load_data()
+            
+            # Perform feature matching
+            Matcher = FeatureMatcher(left_image_keypoints, left_image_descriptor, left_image_scores,
+                            right_image_keypoints, right_image_descriptor, right_image_scores)
+            
+            if (args.outlier_rejection == 1):
+                matches, descriptor_distances = Matcher.RANSAC_matching(distance_ratio=0.82, distance_threshold=2.0,
+                                                                        ransac_reproj_threshold=1, confidence=0.99)
+            else:
+                matches, descriptor_distances = Matcher.epipolar_matching(distance_ratio=0.82, distance_threshold=2.0)
+                
+        # Extract keypoints, descriptors using ORB
+        if (args.feature_extractor == "ORB"):
+            orb = cv.ORB_create(nfeatures=1000)
+            
+            # Detect and compute for left image
+            kp_left, desc_left = orb.detectAndCompute(img_left, None)
+            left_image_keypoints = np.array([kp.pt for kp in kp_left], dtype=float)  # (N, 2)
+            left_image_descriptor = desc_left 
+            left_image_scores = np.array([kp.response for kp in kp_left], dtype=float)  # (N,)
+            
+            # Detect and compute for right image
+            kp_right, desc_right = orb.detectAndCompute(img_right, None)
+            right_image_keypoints = np.array([kp.pt for kp in kp_right], dtype=float)  # (N, 2)
+            right_image_descriptor = desc_right
+            right_image_scores = np.array([kp.response for kp in kp_right], dtype=float)  # (N,)
+            
+            # Perform feature matching
+            Matcher = FeatureMatcher(left_image_keypoints, left_image_descriptor, left_image_scores,
+                            right_image_keypoints, right_image_descriptor, right_image_scores)
+            
+            if (args.outlier_rejection == 1):
+                matches, descriptor_distances = Matcher.RANSAC_matching(distance_threshold=45.0, distance_ratio=0.9,
+                                                                        ransac_reproj_threshold=1, confidence=0.99)
+            else:
+                matches, descriptor_distances = Matcher.epipolar_matching(distance_threshold=50.0, distance_ratio=0.95)
 
+        # Utilize the SuperGlue framework
+        if (args.feature_extractor == "SuperGlue"):
+            
+            pass
+        
         # Handles matches as cv2.DMatch or as list/array of (left_idx, right_idx) pairs.
         def _to_keypoints(kps):
             if len(kps) == 0:
@@ -256,8 +296,6 @@ if __name__ == "__main__":
 
         kp_left = _to_keypoints(left_image_keypoints)
         kp_right = _to_keypoints(right_image_keypoints)
-
-        # TODO: Perform outlier rejection
 
         # Read calibration
         calib_path = calib_dir +'/' + sample_name + '.txt'
@@ -296,9 +334,12 @@ if __name__ == "__main__":
             depth_list.append(depth)    
 
         # Output
+        assert len(depth_list) >= 100 # ensure at least 100 keypoint pairs per sample
+        
         for u, v, disp, depth in zip(pixel_u_list, pixel_v_list, disparity_list, depth_list):
             line = "{} {:.2f} {:.2f} {:.2f} {:.2f}".format(sample_name, u, v, disp, depth)
             output_file.write(line + '\n')
+           
         
         for i, match in enumerate(matches):
             try:
@@ -310,7 +351,7 @@ if __name__ == "__main__":
             cv_Dmatches.append(cv.DMatch(_queryIdx=lidx, _trainIdx=ridx, _imgIdx=0, _distance=dist))
         
         # Draw matches
-        if args.plot == 1:
+        if (args.plot == 1):
             # Use RGB images for the plot
             img_left_color = cv.imread(left_image_path)
             img_right_color = cv.imread(right_image_path)
@@ -328,11 +369,10 @@ if __name__ == "__main__":
             # Small title with minimal padding to reduce vertical gaps
             ax.set_title(f"Sample: {sample_name}", pad=2, fontsize=9)
     
-    if args.plot == 1:
-        # Reduce vertical gaps and trim figure margins tightly on save
+    if (args.plot == 1):
         plt.subplots_adjust(hspace=0.02, top=0.99, bottom=0.01)
         plt.tight_layout()
-        out_path = "stacked_matches_vertical.png"
+        out_path = "matches.png"
         fig.savefig(out_path, dpi=300, bbox_inches='tight', pad_inches=0)
         print(f"Saved {out_path}")
         plt.show()

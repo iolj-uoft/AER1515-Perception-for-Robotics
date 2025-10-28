@@ -62,7 +62,6 @@
 \toc % creates the table of contents
 
 %------------ Report body ----------------
-
 \section{Answers}
 \subsection{Question 1: Feature Point Detection and Corresondences}
 \subsubsection{Feature Detection}
@@ -122,20 +121,22 @@ heatmaps (3rd row) extracted at a single scale. Top-scoring keypoints are shown 
 
 \subsubsection{Feature Matching}
 
-The feature matching pipeline used in this assignment is implemented across three scripts in the repository:
+The feature matching pipeline used in this part is implemented across three scripts in the repository:
 	\texttt{tools/R2D2.py}, \texttt{tools/matcher.py}, and \texttt{starter\_code\_feature.py}. The following summarizes the
 implementation, parameters, and the filtering rules applied during matching and depth computation.
 
 \paragraph{Overview}
 \begin{itemize}
-    \item \texttt{tools/R2D2.py} performs feature detection and descriptor extraction using the R2D2 model. It produces
+    \item \texttt{tools/R2D2.py:} performs feature detection and descriptor extraction using the R2D2 model. It produces
         per-image files containing \texttt{keypoints} (pixel coordinates and scale), \texttt{descriptors} (128-d vectors), and
         \texttt{scores} (reliability values).
-    \item \texttt{tools/matcher.py} implements brute-force L2 nearest-neighbour matching with Lowe's ratio test and simple
+    \item \texttt{tools/matcher.py:} implements brute-force L2 nearest-neighbour matching with Lowe's ratio test and simple
         geometric constraints (vertical epipolar tolerance and disparity sign).
-    \item \texttt{starter\_code\_feature.py} orchestrates extraction and matching, computes disparity and depth using the
-        stereo calibration, applies conservative filtering, writes the sparse depth predictions to \texttt{P3\_result.txt}, and
-        generates diagnostic visualizations.
+    \item \texttt{starter\_code\_feature.py:} perfroms feature extraction and matching, computes disparity and depth using
+        stereo calibration, writes the sparse depth predictions to \texttt{P3\_result.txt}, and
+        generates visualizations.
+    \item \texttt{tools/calculate\_depth\_error.py:} calculate depth errors from the ground truth depth for training images.
+    
 \end{itemize}
 
 \paragraph{Feature extraction (\texttt{tools/R2D2.py})}
@@ -153,10 +154,10 @@ Let $L$ denote left descriptors and $R$ denote right descriptors. Matching proce
     \item Apply Lowe's ratio test and a distance threshold:
         \[\text{ratio\_mask}_i = (d_0/d_1 < \tau_{\mathrm{ratio}}) \;\wedge\; (d_0 \le \tau_{\mathrm{dist}}).\]
         Default code parameters: $\tau_{\mathrm{ratio}}=0.9$, $\tau_{\mathrm{dist}}=5.0$.
-    \item Enforce an epipolar (vertical) constraint: $|v^L_i - v^R_{j_1}| < \epsilon_y$ with $\epsilon_y=2$.
-    \item Require positive disparity (filter out negative disparities): $u^R_{j_1} < u^L_i$.
+    \item Enforce an epipolar constraint: $|v^L_i - v^R_{j_1}| < \epsilon_y$ with $\epsilon_y=2$.
+    \item Filter out negative disparities: $u^R_{j_1} < u^L_i$.
     \item The final mask is the conjunction of the ratio, epipolar and disparity masks; matches and their descriptor distances
-        are returned as arrays for downstream processing.
+        are returned as arrays.
 \end{enumerate}
 
 \paragraph{Disparity and depth (\texttt{starter\_code\_feature.py})}
@@ -165,28 +166,106 @@ For each accepted match (left index $i$, right index $j$) the pixel coordinates 
 Depth is then estimated from stereo geometry via
 \[ z = \frac{f\cdot B}{\text{disparity}},\]
 where $f$ is the focal length and $B$ is the baseline obtained by factorizing the projection matrices
-(see \texttt{krt\_from\_p} and \texttt{get\_stereo\_calibration}).
+(from the classes: \texttt{krt\_from\_p} and \texttt{get\_stereo\_calibration}).
 
 \paragraph{Filtering rules}
-To avoid invalid or very noisy depth estimates, the implementation applies conservative filters:
+As stated in the handout, to avoid invalid or very noisy depth estimates, the implementation applies conservative filters:
 \begin{itemize}
-    \item Skip matches with disparity $\le 0.1$ (prevents division by zero and ignores extremely small disparities).
+    \item Skip matches with disparity $\le 0.1$ (prevents division by zero).
     \item Discard depths $z>80\,$m or $z<0$ (long-range predictions are unreliable for evaluation).
 \end{itemize}
 
 \paragraph{Output and visualization}
 Filtered sparse depth predictions are written to \texttt{P3\_result.txt} with the format
-	\texttt{image\_id u v disparity depth}. Diagnostic visualizations are created using OpenCV's \texttt{cv.drawMatches}
-and stacked figures (one row per sample) are produced and saved with tight bounding boxes to minimize whitespace.
+	\texttt{(image\_id u v disparity depth)}. Visualizations are created using OpenCV's \texttt{cv.drawMatches}.
+
+\paragraph{Evaluation of Estimated Depth Error Using Epipolar Constraint on Training Set}
+ 
+Parameters used: \texttt{distance\_ratio:0.82, distance\_threshold:2.0}
+    \begin{itemize}
+        \item Mean Absolute Error (MAE): 1.3131
+        \item Root Mean Squared Error (RMSE): 2.9181
+        \item Relative Error: 0.0575
+    \end{itemize}
+
 
 \vspace{2mm}
 
 \begin{figure}[H]
         \centering
         \includegraphics[width=\textwidth]{images/Q1.2.1.png}
-        \caption{Feature matching on the test images using brute-force and epipolar constraints.}
+        \caption{Feature matching on the test images using brute-force L2 nearest-neighbour matching and epipolar constraints.}
         \label{fig:6}
 \end{figure}
 
+\subsubsection{Outlier Rejection}
 
+\paragraph{RANSAC-based Outlier Rejection}
+
+To improve geometric consistency beyond the simple epipolar vertical-tolerance test, we run RANSAC to robustly estimate the fundamental matrix from tentative descriptor matches and keep only inliers. The added RANSAC stage performs the following steps:
+
+\begin{enumerate}
+    \item Build tentative matches using brute-force L2 nearest-neighbour matching with Lowe's ratio test.
+    \item Convert matched pixel coordinates to homogeneous points:
+    \[
+      \mathbf{x}_1 = [u_1, v_1, 1]^T,\quad \mathbf{x}_2 = [u_2, v_2, 1]^T.
+    \]
+    \item Estimate the fundamental matrix $F$ using RANSAC with the \texttt{cv.findFundamentalMat()} \\ function:
+    \[
+      F = \texttt{findFundamentalMat}(\{\mathbf{x}_1\},\{\mathbf{x}_2\};\ \texttt{method}=\texttt{FM\_RANSAC},\ \tau_{\text{ransac}},\ \text{conf}).
+    \]
+    In the implementation the typical parameters are $\tau_{\text{ransac}}=1.0$ (pixel threshold) and $\text{conf}=0.99$.
+    \item Use the returned inlier mask from RANSAC to filter matches for downstream disparity and depth computation.
+\end{enumerate}
+
+\paragraph{Evaluation of Estimated Depth Error Using RANSAC on Training Set}
+Parameters used: \texttt{distance\_ratio:0.82, distance\_threshold:2.0, ransac\_reproj\_thershold:1, confidence:0.99}    
+    \begin{itemize}
+        \item Mean Absolute Error (MAE): 1.2295
+        \item Root Mean Squared Error (RMSE): 2.7331
+        \item Relative Error: 0.0563
+    \end{itemize}
+
+\vspace{2mm}
+
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{images/Q1.3.1.png}
+        \caption{Feature matching on the test images using brute-force L2 nearest-neighbour matching and RANSAC outlier rejection.}
+        \label{fig:7}
+\end{figure}
+
+\subsubsection{Alternative Algorithm}
+For alternative algorithms for image matching, two approaches will be implemented. First, I implemented an alternative pipeline that replaces the learned R2D2 detector 
+with the classical ORB detector/descriptor. ORB produces binary descriptors (32 bytes per keypoint) and keypoints with fewer metadata fields than R2D2, so a small amount of adapter code is required
+to feed ORB output into the same downstream matching and depth estimation pipeline. The main changes are summarised below.
+
+\paragraph{ORB: Code-level adaptations}
+The following steps describe the minimal adapter implemented in \texttt{starter\_code\_feature.py}:
+\begin{enumerate}
+    \item Detect and compute ORB keypoints and descriptors:
+        	\texttt{kp, desc = orb.detectAndCompute(img, None)}.
+    \item Convert the list of \texttt{cv2.KeyPoint} objects to a NumPy array of pixel coordinates:
+        	\texttt{pts = np.array([k.pt for k in kp], dtype=float)} (shape $N\times 2$).
+    \item Extract a per-keypoint score from ORB's \texttt{kp.response}.
+    \item A Hamming-capable matching path was introduced so binary descriptors can be matched natively without converting them to floating point,
+    if descriptors are in binary, use Hamming distance.
+    \item Initialize \texttt{FeatureMatcher} with the adapted arrays: \texttt{FeatureMatcher(pts, desc, scores, ...)}.
+\end{enumerate}
+
+\paragraph{ORB: Expected outcome}
+ORB is faster but typically less robust than the learned R2D2 features in challenging illumination or viewpoint changes.
+Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_reproj\_thershold:1, confidence:0.99}  
+\begin{itemize}
+        \item Mean Absolute Error (MAE): 2.4556
+        \item Root Mean Squared Error (RMSE): 4.6676
+        \item Relative Error: 0.0795
+\end{itemize}
+
+\noindent The second approach is to use a fully learned Graph-based neural-network framework \href{https://github.com/magicleap/SuperGluePretrainedNetwork}{SuperGlue},
+ that combines with an Optimal Matching layer that is trained to perform matching on two sets of sparse image features. In this network, it natively
+ uses the output from \href{https://github.com/rpautrat/SuperPoint}{SuperPoint}, and to simplify the process, I'll use the demo script in SuperGlue's repository
+ to produce keypoint pairs and descriptors.
+
+ \paragraph{SuperGlue: Code-level adaptations}
 \end{document}
