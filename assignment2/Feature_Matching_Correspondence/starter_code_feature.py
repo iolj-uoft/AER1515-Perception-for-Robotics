@@ -6,7 +6,6 @@ import os
 import argparse
 from tools.R2D2 import R2D2
 from tools.matcher import FeatureMatcher
-import tools.superglue
 
 class FrameCalib:
     """Frame Calibration
@@ -196,20 +195,20 @@ if __name__ == "__main__":
     parser.add_argument("--test", type=int, default=0, required=True, help="Select True to perform matching on test dataset.")
     parser.add_argument("--plot", type=int, default=0)
     parser.add_argument("--outlier-rejection", type=str, default="RANSAC", choices=["RANSAC", "epipolar"], required=True, help="Select Matching Algorithm.")
-    parser.add_argument("--feature-extractor", type=str, default="R2D2", choices=["R2D2", "ORB", "SuperGlue"], 
+    parser.add_argument("--feature-extractor", type=str, default="R2D2", choices=["R2D2", "ORB"], 
                         help="Select feature extractor: R2D2 or ORB.")
     args = parser.parse_args()
     
     ## Input
     if (args.test == 1):
-        left_image_dir = os.path.abspath('./test/left')
-        right_image_dir = os.path.abspath('./test/right')
-        calib_dir = os.path.abspath('./test/calib')
+        left_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/test/left')
+        right_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/test/right')
+        calib_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/test/calib')
         sample_list = ['000011', '000012', '000013', '000014','000015']
     else: 
-        left_image_dir = os.path.abspath('./training/left')
-        right_image_dir = os.path.abspath('./training/right')
-        calib_dir = os.path.abspath('./training/calib')
+        left_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/training/left')
+        right_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/training/right')
+        calib_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/training/calib')
         sample_list = ['000001', '000002', '000003', '000004','000005', '000006', '000007', '000008', '000009', '000010']
 
     ## Output
@@ -281,11 +280,6 @@ if __name__ == "__main__":
             else:
                 matches, descriptor_distances = Matcher.epipolar_matching(distance_threshold=50.0, distance_ratio=0.95)
 
-        # Utilize the SuperGlue framework
-        if (args.feature_extractor == "SuperGlue"):
-            
-            pass
-        
         # Handles matches as cv2.DMatch or as list/array of (left_idx, right_idx) pairs.
         def _to_keypoints(kps):
             if len(kps) == 0:
