@@ -277,9 +277,9 @@ Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_
  \paragraph{SuperGlue: Code-level adaptations}
 
  \begin{itemize}
-        \item Mean Absolute Error (MAE): 1.8115
-        \item Root Mean Squared Error (RMSE): 4.4162
-        \item Relative Error: 0.0868
+        \item Mean Absolute Error (MAE): 1.8
+        \item Root Mean Squared Error (RMSE): 4.3443
+        \item Relative Error: 0.0861
 \end{itemize}
 
 \begin{figure}[H]
@@ -288,5 +288,45 @@ Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_
         \caption{Feature matching on the test images using the SuperGlue framework.}
         \label{fig:9}
 \end{figure}
+
+\subsection{Question 2: 3D Point Cloud Registration}
+\subsubsection{Nearest Neighbour Search}
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=0.5\textwidth]{images/combined_icp_mean_distance.png}
+        \caption{Feature matching on the test images using the SuperGlue framework.}
+        \label{fig:10}
+\end{figure}
+
+
+\subsubsection{Pose Estimation from the Correspondences}
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=0.5\textwidth]{images/combined_icp_translation_components.png}
+        \caption{Feature matching on the test images using the SuperGlue framework.}
+        \label{fig:11}
+\end{figure}
+
+\subsubsection{Iterative Closest Point Registration}
+\begin{figure}[H]
+        \centering
+        \includegraphics[width=\textwidth]{images/combined_before_after.png}
+        \caption{Feature matching on the test images using the SuperGlue framework.}
+        \label{fig:12}
+\end{figure}
+
+\begin{listing}[H]
+    \caption{Estimated rotation and translation errors on training sets, and estimated test set 6D pose}
+    \begin{minted}[]{text}
+    bunny -- Rotation error (deg): 0.0000, Translation error: 0.0001
+    dragon -- Rotation error (deg): 0.0000, Translation error: 0.0000
+
+    armadillo -- Estimated 6D pose:
+    [[ 0.777541 -0.066073  0.625351 -2.689722]
+    [-0.384049  0.737557  0.555442 -1.858343]
+    [-0.497931 -0.672045  0.548106 -5.961925]
+    [ 0.        0.        0.        1.      ]]
+    \end{minted}
+\end{listing}
 
 \end{document}

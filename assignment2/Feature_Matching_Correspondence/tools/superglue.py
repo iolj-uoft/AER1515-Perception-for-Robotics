@@ -50,7 +50,8 @@ class SuperGlue:
                     "--input_pairs", "assignment2/Feature_Matching_Correspondence/SuperGlueData/pairs.txt",
                     "--input_dir", "assignment2/Feature_Matching_Correspondence/SuperGlueData/images",
                     "--resize", "-1", "-1",
-                    "--cache"
+                    "--cache",
+                    "--max_keypoints", "2000"
                 ]
         subprocess.run(call_superglue)
         
@@ -85,6 +86,19 @@ class SuperGlue:
                 matched_pairs.append((kp0, kp1, conf))
         
         return matched_pairs
+
+    def delete_npz_files(self, output_dir: str = "assignment2/Feature_Matching_Correspondence/SuperGlueData"):
+        """
+        Delete all .npz files in the specified output directory.
+        
+        Args:
+            output_dir: Directory containing the .npz files to delete.
+        """
+        import glob
+        npz_files = glob.glob(os.path.join(output_dir, '*.npz'))
+        for file in npz_files:
+            os.remove(file)
+        print(f"Deleted {len(npz_files)} .npz files from {output_dir}")
 
 
 if __name__ == "__main__":

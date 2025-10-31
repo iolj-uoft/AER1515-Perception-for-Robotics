@@ -219,6 +219,7 @@ if __name__ == "__main__":
     else:
         SG.move_images("assignment2/Feature_Matching_Correspondence/training")
     
+    # SG.delete_npz_files()
     SG.call_SuperGlue()
     
     images_list = []  # To collect images for vertical stacking
