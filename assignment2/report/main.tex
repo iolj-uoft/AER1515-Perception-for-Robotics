@@ -10,7 +10,7 @@
 \usepackage{hyperref}
 \hypersetup{
     colorlinks=true,        % Enable colored links
-    linkcolor=black,         % Color for internal links
+    linkcolor=blue,         % Color for internal links
     citecolor=black,         % Color for citations
     filecolor=blue,         % Color for file links
     urlcolor=blue           % Color for URLs
@@ -132,7 +132,7 @@ implementation, parameters, and the filtering rules applied during matching and 
         \texttt{scores} (reliability values).
     \item \texttt{tools/matcher.py:} implements brute-force L2 nearest-neighbour matching with Lowe's ratio test and simple
         geometric constraints (vertical epipolar tolerance and disparity sign).
-    \item \texttt{starter\_code\_feature.py:} perfroms feature extraction and matching, computes disparity and depth using
+    \item \texttt{starter\_code\_feature.py:} performs feature extraction and matching, computes disparity and depth using
         stereo calibration, writes the sparse depth predictions to \texttt{P3\_result.txt}, and
         generates visualizations.
     \item \texttt{tools/calculate\_depth\_error.py:} calculate depth errors from the ground truth depth for training images.
@@ -214,7 +214,6 @@ To improve geometric consistency beyond the simple epipolar vertical-tolerance t
     \[
       F = \texttt{findFundamentalMat}(\{\mathbf{x}_1\},\{\mathbf{x}_2\};\ \texttt{method}=\texttt{FM\_RANSAC},\ \tau_{\text{ransac}},\ \text{conf}).
     \]
-    In the implementation the typical parameters are $\tau_{\text{ransac}}=1.0$ (pixel threshold) and $\text{conf}=0.99$.
     \item Use the returned inlier mask from RANSAC to filter matches for downstream disparity and depth computation.
 \end{enumerate}
 
@@ -253,7 +252,7 @@ The following steps describe the minimal adapter implemented in \texttt{starter\
     \item Initialize \texttt{FeatureMatcher} with the adapted arrays: \texttt{FeatureMatcher(pts, desc, scores, ...)}.
 \end{enumerate}
 
-\paragraph{ORB: Expected outcome}
+\paragraph{ORB: Evaluation}
 ORB is faster but typically less robust than the learned R2D2 features in challenging illumination or viewpoint changes.
 Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_reproj\_thershold:1, confidence:0.99}  
 \begin{itemize}
@@ -274,8 +273,43 @@ Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_
  uses the output from \href{https://github.com/rpautrat/SuperPoint}{SuperPoint}, and to simplify the process, I'll use the demo script in SuperGlue's repository
  to produce keypoint pairs and descriptors.
 
+ \paragraph{SuperGlue: Algorithm summary}
+SuperGlue is a learned, graph-based matching module that replaces heuristic nearest-neighbour matching with a learned attention and optimal-matching stage. In short:
+\begin{itemize}
+    \item Input: two sets of sparse features \(\{(x_i,d_i)\}_{i=1}^N\) and \(\{(y_j,d'_j)\}_{j=1}^M\) (pixel coordinates and descriptors).
+    \item Contextualization: descriptors are augmented with positional encodings and processed by self- and cross-attention layers to produce context-aware 
+    descriptors \(c_i\) and \(c'_j\).
+    \item Score matrix: a learned similarity produces scores \(S_{ij} = \exp\big(c_i^\top c'_j\big)\) (optionally with a learned linear projection and 
+    temperature).
+    \item Optimal matching: Sinkhorn normalization is applied to \(S\) to produce a (soft) doubly-stochastic matrix \(P=\text{Sinkhorn}(S)\). Discrete 
+    matches are then taken as
+    \[
+      m(i) = \arg\max_j P_{ij}\quad\text{with}\quad P_{i,m(i)} > \tau_{\text{match}},
+    \]
+    and match confidence is given by \(\max_j P_{ij}\).
+    \item Output: one-to-one consistent matches with per-match confidence; the learned module handles ambiguity and enforces global consistency better 
+    than independent NN tests.
+\end{itemize}
+The approach is described in detail in the SuperGlue paper (Sarlin et al., CVPR'20). In this project we use the pretrained demo weights (``outdoor'') 
+and the Sinkhorn-based matching with a small confidence threshold; the resulting matches are passed unchanged to the depth pipeline described above.
+
  \paragraph{SuperGlue: Code-level adaptations}
 
+ Integration of SuperGlue into the pipeline was implemented as a separate module to avoid perturbing the existing detector/descriptor flow. Practically this required three changes:
+ \begin{enumerate}
+    \item Batch invocation and file-format handling. We run the provided demo script (\texttt{match\_pairs.py}) once over all image pairs (via a 
+    \texttt{pairs.txt} file) so SuperGlue produces a set of \texttt{*.npz} outputs in a single output folder. Each \texttt{.npz} contains the arrays 
+    \texttt{keypoints0}, \texttt{keypoints1}, \texttt{matches} and \texttt{match\_confidence} (see SuperGlue demo). A loader in \texttt{tools/superglue.py} 
+    reads those files and extracts only the matches where \texttt{matches[i] > -1} and \texttt{match\_confidence[i]} exceeds a small confidence threshold.
+    \item Adapter to the sparse depth pipeline. SuperGlue returns keypoint coordinates in pixel space and indices of matched points. We convert those directly 
+    to the pipeline's expected format: left/right pixel coordinates (u,v), compute disparity $u_L-u_R$, apply the same disparity / depth filters 
+    (disparity $>0.1$, $0<z\le80$\,m), and write valid predictions to \texttt{P3\_result.txt}. To keep output stable we require a minimum number of valid 
+    pairs per image (100) before writing that sample's predictions.
+    \item Visualization and post-processing. For human inspection we construct OpenCV-style match visualizations using \texttt{cv.drawMatches} per sample, 
+    then stitch per-sample before/after images horizontally and stack them vertically into a single figure.
+\end{enumerate}
+
+\paragraph{SuperGlue: Evaluation}
  \begin{itemize}
         \item Mean Absolute Error (MAE): 1.8
         \item Root Mean Squared Error (RMSE): 4.3443
@@ -294,24 +328,49 @@ Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_
 \begin{figure}[H]
         \centering
         \includegraphics[width=0.5\textwidth]{images/combined_icp_mean_distance.png}
-        \caption{Feature matching on the test images using the SuperGlue framework.}
+        \caption{ICP loss for each object during iterations.}
         \label{fig:10}
 \end{figure}
+\paragraph{Description of the ICP loss}
+From Fig.~\ref{fig:10}, the ICP loss (mean Euclidean distance between corresponding point pairs) for all objects decreases sharply within the first five iterations. 
+For the Armadillo and Bunny datasets, the loss stabilizes around 1 and 2, respectively, after approximately ten iterations. In contrast, the Dragon dataset 
+exhibits a more gradual, nearly linear decline between the 5th and 25th iterations, reaching near zero by the 30th iteration. Additional iterations could be 
+tested on the Dragon dataset to confirm whether it has fully converged or if further improvement is possible.
 
+\paragraph{Explanation of the ICP loss}
+The differing convergence behaviors in the ICP loss plots can be attributed primarily to variations in the point density of the target clouds, since the number of 
+source point clouds for all objects are approximately 450, which can be excluded as a factor.
+The Armadillo and Bunny datasets, each containing around 1400 target points, provide  dense coverage for ICP to quickly establish correspondences and 
+converge within the first few iterations. In contrast, the Dragon dataset contains about 1200 target points, resulting 
+in a sparser surface coverage. This reduced density limits the number of reliable correspondences, causing ICP to 
+refine the alignment more gradually. Consequently, the dragon’s loss decreases in a slower, near-linear trend.
 
 \subsubsection{Pose Estimation from the Correspondences}
 \begin{figure}[H]
         \centering
         \includegraphics[width=0.5\textwidth]{images/combined_icp_translation_components.png}
-        \caption{Feature matching on the test images using the SuperGlue framework.}
+        \caption{3D Translation for each object during iterations.}
         \label{fig:11}
 \end{figure}
+\paragraph{Description of the estimated 6D pose changes during ICP iterations}
+From Fig.~\ref{fig:11}, the evolution of the estimated 6D pose during the ICP iterations shows that 
+most translation updates occur within the first few iterations. For the armadillo and bunny datasets, 
+the translation components (X, Y, Z) change sharply at the beginning as the source cloud aligns with 
+the target’s global position, then quickly stabilize near zero, indicating convergence. In contrast, 
+the dragon dataset displays persistent oscillations, especially along the X-axis, where the translation 
+continues to vary even after 20 iterations.
+
+\paragraph{Explanation of the estimated 6D pose changes during ICP iterations}
+This behavior reflects the convergence dynamics of ICP. The rapid initial changes correspond to large corrective updates that reduce coarse misalignment, while the later 
+stabilization indicates consistent correspondences and refined alignment. The fluctuations in the dragon dataset arise from its lower target point density that was
+mentioned above, which limits the number of reliable correspondences. As a result, ICP 
+requires more iterations and exhibits a less stable pose estimation process before convergence for the Dragon dataset.
 
 \subsubsection{Iterative Closest Point Registration}
 \begin{figure}[H]
         \centering
         \includegraphics[width=\textwidth]{images/combined_before_after.png}
-        \caption{Feature matching on the test images using the SuperGlue framework.}
+        \caption{Demonstration of the point cloud registration result using the ICP algorithm after 30 iterations.}
         \label{fig:12}
 \end{figure}
 
