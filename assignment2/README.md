@@ -44,6 +44,11 @@ This repository contains code for **Assignment 2** of the course **AER1515 - Per
    python -c "import torch; import cv2; import numpy; print('Environment OK')"
    ```
 
+5. **Clone the R2D2 and SuperGlue Repository**
+   ```bash
+   cd Feature_Matching_correspondence
+   git clone https://github.com/naver/r2d2.git
+   git clone https://github.com/magicleap/SuperGluePretrainedNetwork.git
 ---
 
 ## Part I — Feature Matching & Sparse Depth Estimation
@@ -86,7 +91,6 @@ Feature_Matching_Correspondence/
 
 **Command**:
 ```bash
-cd Feature_Matching_Correspondence
 python starter_code_feature.py --test 0 --plot 0 --use-RANSAC 1 --feature-detector R2D2
 ```
 
@@ -146,7 +150,7 @@ python match_pairs.py \
 #### Step 2: Compute Depths from SuperGlue Matches
 
 ```bash
-cd Feature_Matching_Correspondence
+cd ..
 python superglue_feature.py
 ```
 
