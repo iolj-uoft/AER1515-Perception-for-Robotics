@@ -194,25 +194,25 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--test", type=int, default=0, required=True, help="Select True to perform matching on test dataset.")
     parser.add_argument("--plot", type=int, default=0)
-    parser.add_argument("--outlier-rejection", type=str, default="RANSAC", choices=["RANSAC", "epipolar"], required=True, help="Select Matching Algorithm.")
+    parser.add_argument("--outlier-rejection", type=str, default="RANSAC", choices=["RANSAC", "epipolar"], help="Select Matching Algorithm.")
     parser.add_argument("--feature-extractor", type=str, default="R2D2", choices=["R2D2", "ORB"], 
                         help="Select feature extractor: R2D2 or ORB.")
     args = parser.parse_args()
     
     ## Input
     if (args.test == 1):
-        left_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/test/left')
-        right_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/test/right')
-        calib_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/test/calib')
+        left_image_dir = os.path.abspath('./test/left')
+        right_image_dir = os.path.abspath('./test/right')
+        calib_dir = os.path.abspath('./test/calib')
         sample_list = ['000011', '000012', '000013', '000014','000015']
     else: 
-        left_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/training/left')
-        right_image_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/training/right')
-        calib_dir = os.path.abspath('assignment2/Feature_Matching_Correspondence/training/calib')
+        left_image_dir = os.path.abspath('./training/left')
+        right_image_dir = os.path.abspath('./training/right')
+        calib_dir = os.path.abspath('./training/calib')
         sample_list = ['000001', '000002', '000003', '000004','000005', '000006', '000007', '000008', '000009', '000010']
 
     ## Output
-    output_file = open("P3_result.txt", "a")
+    output_file = open("./P3_result.txt", "a")
     output_file.truncate(0)
 
 
@@ -248,10 +248,10 @@ if __name__ == "__main__":
             Matcher = FeatureMatcher(left_image_keypoints, left_image_descriptor, left_image_scores,
                             right_image_keypoints, right_image_descriptor, right_image_scores)
             
-            if (args.outlier_rejection == 1):
+            if (args.outlier_rejection == "RANSAC"):
                 matches, descriptor_distances = Matcher.RANSAC_matching(distance_ratio=0.82, distance_threshold=2.0,
                                                                         ransac_reproj_threshold=1, confidence=0.99)
-            else:
+            elif(args.outlier_rejection == "epipolar"):
                 matches, descriptor_distances = Matcher.epipolar_matching(distance_ratio=0.82, distance_threshold=2.0)
                 
         # Extract keypoints, descriptors using ORB
@@ -274,10 +274,10 @@ if __name__ == "__main__":
             Matcher = FeatureMatcher(left_image_keypoints, left_image_descriptor, left_image_scores,
                             right_image_keypoints, right_image_descriptor, right_image_scores)
             
-            if (args.outlier_rejection == 1):
+            if (args.outlier_rejection == "RANSAC"):
                 matches, descriptor_distances = Matcher.RANSAC_matching(distance_threshold=45.0, distance_ratio=0.9,
                                                                         ransac_reproj_threshold=1, confidence=0.99)
-            else:
+            elif(args.outlier_rejection == "epipolar"):
                 matches, descriptor_distances = Matcher.epipolar_matching(distance_threshold=50.0, distance_ratio=0.95)
 
         # Handles matches as cv2.DMatch or as list/array of (left_idx, right_idx) pairs.

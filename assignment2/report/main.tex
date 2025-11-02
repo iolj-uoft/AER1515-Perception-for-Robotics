@@ -8,6 +8,11 @@
 \usepackage{minted}
 \usepackage{amsmath, amssymb, amsfonts}
 \usepackage{hyperref}
+
+\pdfminorversion=5
+\pdfcompresslevel=9
+\pdfobjcompresslevel=5
+
 \hypersetup{
     colorlinks=true,        % Enable colored links
     linkcolor=blue,         % Color for internal links
@@ -79,34 +84,53 @@
     \label{fig:2}
 \end{figure}
 
-I utilized the R2D2 framework as the feature detection algorithm. 
-From Fig.~\ref{fig:1} and Fig.~\ref{fig:2}, it can be observed that most keypoints are 
+\paragraph{R2D2: Feature Detector Summary}
+For the first feature detector, I chose the R2D2 detector from \cite{r2d2}. The R2D2 detector-descriptor is a CNN-based method that jointly predicts (1) a repeatability heatmap \(R(\mathbf{x})\), (2) a 
+reliability/confidence map \(S(\mathbf{x})\), and (3) dense descriptors \(D(\mathbf{x})\) over the image. Keypoints are produced 
+by selecting spatial local maxima of the repeatability map and then filtering those candidates by reliability:
+\[
+\mathcal{K} = \{\,\mathbf{x} \mid R(\mathbf{x}) \text{ is a local maximum and } S(\mathbf{x})>\tau\,\},
+\]
+where \(\tau\) is a threshold controlling how reliable a detected point must be to be kept. Descriptors are sampled from the dense 
+descriptor field and L2-normalized:
+\[
+\mathbf{d}(\mathbf{x}) = \frac{D(\mathbf{x})}{\lVert D(\mathbf{x})\rVert_2}.
+\]
+During training, R2D2 optimizes three complementary objectives: a descriptor matching loss that encourages descriptors at corresponding 
+locations to be similar, a repeatability loss that encourages stable local maxima under geometric/image transformations, and a 
+reliability loss that predicts whether a detected keypoint will yield a correct match. In practice, this yields sparse keypoints 
+that are both repeatable across views and predictable to match (high reliability), which improves downstream matching quality compared 
+with detectors that report only corner strength or only descriptor distinctiveness.
+
+\paragraph{R2D2: Unreliable Keypoints}
+From Fig.~\ref{fig:1} and Fig.~\ref{fig:2}, we can observe that most keypoints are 
 concentrated around visually distinctive regions of the image, such as object boundaries, 
 textured surfaces, and high-contrast areas. The clustering of keypoints occurs because R2D2 
 detects features across multiple scales, which can lead to overlapping detections when strong 
-structures are present at several pyramid levels. In the following plots, the radius of 
+structures are present at several pyramid levels. However, there are still few keypoints that lie in regions that have less distinct or repetitive features, such as the ones
+in the shaded tree area on the left side of Image 2 and right side of Image 5, or on the ground piles in most of the images.
+In the following plots, the radius of 
 each circle represents the detected scale of the corresponding keypoint, illustrating the multi-scale 
 nature of the detector.
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{images/Q1.1.1_scaled.png}
-    \caption{30 keypoints with scaled radius}
+    \caption{Top 30 keypoints with scaled radius in each image}
     \label{fig:3}
 \end{figure}
 
 \begin{figure}[H]
     \centering
     \includegraphics[width=\textwidth]{images/Q1.1.2_scaled.png}
-    \caption{30 keypoints with scaled radius}
+    \caption{Top 30 keypoints with scaled radius in each image}
     \label{fig:4}
 \end{figure}
 
 The radius of each green circle represents the scale predicted by R2D2 for that keypoint, corresponding to the 
 size of the image region that contributes to its descriptor. Larger circles indicate coarse-scale features 
 that remain stable across viewpoint and blur changes, while smaller circles 
-correspond to fine-scale texture details. The variation in circle sizes illustrates the multi-scale nature of 
-the detector, allowing robust matching across different levels of zoom and scene detail.
+correspond to fine-scale texture details.
 Since the R2D2 framework natively provide "scores" for each keypoint, it's easy to identify which keypoints
 are less reliable when we perform image matching in the later steps. 
 
@@ -127,7 +151,7 @@ implementation, parameters, and the filtering rules applied during matching and 
 
 \paragraph{Overview}
 \begin{itemize}
-    \item \texttt{tools/R2D2.py:} performs feature detection and descriptor extraction using the R2D2 model. It produces
+    \item \texttt{tools/R2D2.py:} performs feature detection and descriptor extraction using the R2D2 framework \cite{r2d2}. It produces
         per-image files containing \texttt{keypoints} (pixel coordinates and scale), \texttt{descriptors} (128-d vectors), and
         \texttt{scores} (reliability values).
     \item \texttt{tools/matcher.py:} implements brute-force L2 nearest-neighbour matching with Lowe's ratio test and simple
@@ -166,10 +190,10 @@ For each accepted match (left index $i$, right index $j$) the pixel coordinates 
 Depth is then estimated from stereo geometry via
 \[ z = \frac{f\cdot B}{\text{disparity}},\]
 where $f$ is the focal length and $B$ is the baseline obtained by factorizing the projection matrices
-(from the classes: \texttt{krt\_from\_p} and \texttt{get\_stereo\_calibration}).
+(from the built-in classes: \texttt{krt\_from\_p} and \texttt{get\_stereo\_calibration}).
 
 \paragraph{Filtering rules}
-As stated in the handout, to avoid invalid or very noisy depth estimates, the implementation applies conservative filters:
+As stated in the handout, to avoid invalid or very noisy depth estimates, the implementation applies the following filters:
 \begin{itemize}
     \item Skip matches with disparity $\le 0.1$ (prevents division by zero).
     \item Discard depths $z>80\,$m or $z<0$ (long-range predictions are unreliable for evaluation).
@@ -194,7 +218,7 @@ Parameters used: \texttt{distance\_ratio:0.82, distance\_threshold:2.0}
 \begin{figure}[H]
         \centering
         \includegraphics[width=\textwidth]{images/Q1.2.1.png}
-        \caption{Feature matching on the test images using brute-force L2 nearest-neighbour matching and epipolar constraints.}
+        \caption{Feature matching on the test images using brute-force L2 nearest-neighbour matching and epipolar constraints with R2D2 \cite{r2d2}.}
         \label{fig:6}
 \end{figure}
 
@@ -202,10 +226,11 @@ Parameters used: \texttt{distance\_ratio:0.82, distance\_threshold:2.0}
 
 \paragraph{RANSAC-based Outlier Rejection}
 
-To improve geometric consistency beyond the simple epipolar vertical-tolerance test, we run RANSAC to robustly estimate the fundamental matrix from tentative descriptor matches and keep only inliers. The added RANSAC stage performs the following steps:
+To improve geometric consistency beyond the simple epipolar vertical-tolerance test, I ran RANSAC to estimate the fundamental matrix from 
+tentative descriptor matches and reject the outliers. The added RANSAC stage performs the following steps:
 
 \begin{enumerate}
-    \item Build tentative matches using brute-force L2 nearest-neighbour matching with Lowe's ratio test.
+    \item Build tentative matches using brute-force L2 nearest-neighbour matching with Lowe's ratio test. (Same as the previous approach.)
     \item Convert matched pixel coordinates to homogeneous points:
     \[
       \mathbf{x}_1 = [u_1, v_1, 1]^T,\quad \mathbf{x}_2 = [u_2, v_2, 1]^T.
@@ -230,14 +255,21 @@ Parameters used: \texttt{distance\_ratio:0.82, distance\_threshold:2.0, ransac\_
 \begin{figure}[H]
         \centering
         \includegraphics[width=\textwidth]{images/Q1.3.1.png}
-        \caption{Feature matching on the test images using brute-force L2 nearest-neighbour matching and RANSAC outlier rejection.}
+        \caption{Feature matching on the test images using brute-force L2 nearest-neighbour matching and RANSAC outlier rejection with R2D2 \cite{r2d2}.}
         \label{fig:7}
 \end{figure}
 
 \subsubsection{Alternative Algorithm}
-For alternative algorithms for image matching, two approaches will be implemented. First, I implemented an alternative pipeline that replaces the learned R2D2 detector 
-with the classical ORB detector/descriptor. ORB produces binary descriptors (32 bytes per keypoint) and keypoints with fewer metadata fields than R2D2, so a small amount of adapter code is required
-to feed ORB output into the same downstream matching and depth estimation pipeline. The main changes are summarised below.
+For alternative algorithms for image matching, two approaches will be implemented.
+\paragraph{ORB: Feature Detector Summary}
+First, I implemented an alternative pipeline that replaces the learned R2D2 detector 
+with the classical ORB detector/descriptor. ORB (Oriented FAST and Rotated BRIEF) \cite{ORB} detects keypoints using the FAST corner detector applied on an image 
+pyramid for scale robustness, and estimates a dominant orientation for each keypoint to obtain rotation invariance, and 
+computes BRIEF-style binary descriptors on a rotated sampling pattern aligned to that orientation. The resulting 256-bit binary vectors are compact and 
+extremely fast to match using Hamming distance; ORB also applies non-maximum suppression and keypoint scoring to retain stable points across scales, making 
+it suitable for real-time or resource-constrained pipelines where learned descriptors may be too costly.
+As ORB produces binary descriptors and keypoints with fewer metadata fields than R2D2, a small amount of code changes is required
+to feed ORB output into the same downstream matching and depth estimation pipeline. The main changes are summarized below.
 
 \paragraph{ORB: Code-level adaptations}
 The following steps describe the minimal adapter implemented in \texttt{starter\_code\_feature.py}:
@@ -247,9 +279,10 @@ The following steps describe the minimal adapter implemented in \texttt{starter\
     \item Convert the list of \texttt{cv2.KeyPoint} objects to a NumPy array of pixel coordinates:
         	\texttt{pts = np.array([k.pt for k in kp], dtype=float)} (shape $N\times 2$).
     \item Extract a per-keypoint score from ORB's \texttt{kp.response}.
-    \item A Hamming-capable matching path was introduced so binary descriptors can be matched natively without converting them to floating point,
-    if descriptors are in binary, use Hamming distance.
-    \item Initialize \texttt{FeatureMatcher} with the adapted arrays: \texttt{FeatureMatcher(pts, desc, scores, ...)}.
+    \item A Hamming-capable matching method was introduced so binary descriptors from ORB can be matched natively without converting them to floating point.
+    Specifically, the descriptors are kept as uint8 and matched with OpenCV's brute-force matcher (e.g. \texttt{cv::BFMatcher(cv::NORM\_HAMMING)}).
+    I still applied Lowe's ratio test and an empirical distance threshold to remove weak matches.
+    \item Initialize the defined \texttt{FeatureMatcher} with the adapted arrays: \texttt{FeatureMatcher(pts, desc, scores, ...)}.
 \end{enumerate}
 
 \paragraph{ORB: Evaluation}
@@ -268,9 +301,9 @@ Parameters used: \texttt{distance\_ratio:0.9, distance\_threshold:45.0, ransac\_
         \label{fig:8}
 \end{figure}
 
-\noindent The second approach is to use a fully learned Graph-based neural-network framework \href{https://github.com/magicleap/SuperGluePretrainedNetwork}{SuperGlue},
+\noindent The second alternative algirthm is to use a fully learned Graph-based neural-network framework \href{https://github.com/magicleap/SuperGluePretrainedNetwork}{SuperGlue} \cite{sarlin20superglue},
  that combines with an Optimal Matching layer that is trained to perform matching on two sets of sparse image features. In this network, it natively
- uses the output from \href{https://github.com/rpautrat/SuperPoint}{SuperPoint}, and to simplify the process, I'll use the demo script in SuperGlue's repository
+ uses the output from \href{https://github.com/rpautrat/SuperPoint}{SuperPoint} \cite{DBLP:journals/corr/abs-1712-07629}, and to simplify the process, I'll use the demo script in SuperGlue's repository
  to produce keypoint pairs and descriptors.
 
  \paragraph{SuperGlue: Algorithm summary}
@@ -290,23 +323,20 @@ SuperGlue is a learned, graph-based matching module that replaces heuristic near
     \item Output: one-to-one consistent matches with per-match confidence; the learned module handles ambiguity and enforces global consistency better 
     than independent NN tests.
 \end{itemize}
-The approach is described in detail in the SuperGlue paper (Sarlin et al., CVPR'20). In this project we use the pretrained demo weights (``outdoor'') 
+The approach is described in detail in the SuperGlue paper \cite{sarlin20superglue}. In this project we use the pretrained demo weights (``outdoor'') 
 and the Sinkhorn-based matching with a small confidence threshold; the resulting matches are passed unchanged to the depth pipeline described above.
 
  \paragraph{SuperGlue: Code-level adaptations}
 
- Integration of SuperGlue into the pipeline was implemented as a separate module to avoid perturbing the existing detector/descriptor flow. Practically this required three changes:
+ Integration of SuperGlue into the pipeline was implemented as a separate module to avoid perturbing the existing detector/descriptor flow.
  \begin{enumerate}
-    \item Batch invocation and file-format handling. We run the provided demo script (\texttt{match\_pairs.py}) once over all image pairs (via a 
+    \item Batch invocation and file-format handling. I ran the provided demo script (\texttt{match\_pairs.py}) once over all image pairs (via a 
     \texttt{pairs.txt} file) so SuperGlue produces a set of \texttt{*.npz} outputs in a single output folder. Each \texttt{.npz} contains the arrays 
-    \texttt{keypoints0}, \texttt{keypoints1}, \texttt{matches} and \texttt{match\_confidence} (see SuperGlue demo). A loader in \texttt{tools/superglue.py} 
+    \texttt{keypoints0}, \texttt{keypoints1}, \texttt{matches} and \texttt{match\_confidence}. A loader in \texttt{tools/superglue.py} 
     reads those files and extracts only the matches where \texttt{matches[i] > -1} and \texttt{match\_confidence[i]} exceeds a small confidence threshold.
-    \item Adapter to the sparse depth pipeline. SuperGlue returns keypoint coordinates in pixel space and indices of matched points. We convert those directly 
+    \item Adapter to the sparse depth pipeline. SuperGlue returns keypoint coordinates in pixel space and indices of matched points, so I converted those directly 
     to the pipeline's expected format: left/right pixel coordinates (u,v), compute disparity $u_L-u_R$, apply the same disparity / depth filters 
-    (disparity $>0.1$, $0<z\le80$\,m), and write valid predictions to \texttt{P3\_result.txt}. To keep output stable we require a minimum number of valid 
-    pairs per image (100) before writing that sample's predictions.
-    \item Visualization and post-processing. For human inspection we construct OpenCV-style match visualizations using \texttt{cv.drawMatches} per sample, 
-    then stitch per-sample before/after images horizontally and stack them vertically into a single figure.
+    (disparity $>0.1$, $0<z\le80$\,m), and write valid predictions to \texttt{P3\_result.txt}.
 \end{enumerate}
 
 \paragraph{SuperGlue: Evaluation}
@@ -334,7 +364,7 @@ and the Sinkhorn-based matching with a small confidence threshold; the resulting
 \paragraph{Description of the ICP loss}
 From Fig.~\ref{fig:10}, the ICP loss (mean Euclidean distance between corresponding point pairs) for all objects decreases sharply within the first five iterations. 
 For the Armadillo and Bunny datasets, the loss stabilizes around 1 and 2, respectively, after approximately ten iterations. In contrast, the Dragon dataset 
-exhibits a more gradual, nearly linear decline between the 5th and 25th iterations, reaching near zero by the 30th iteration. Additional iterations could be 
+exhibits a more gradual, nearly linear decline between the 5th and 25th iteration, reaching near zero by the 30th iteration. Additional iterations could be 
 tested on the Dragon dataset to confirm whether it has fully converged or if further improvement is possible.
 
 \paragraph{Explanation of the ICP loss}
@@ -387,5 +417,8 @@ requires more iterations and exhibits a less stable pose estimation process befo
     [ 0.        0.        0.        1.      ]]
     \end{minted}
 \end{listing}
+
+\bibliographystyle{ieeetr}  
+\bibliography{references} 
 
 \end{document}

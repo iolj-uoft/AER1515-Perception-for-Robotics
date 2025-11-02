@@ -9,8 +9,8 @@ class SuperGlue:
         pass 
     
     def move_images(self, mother_dir: str, 
-                    output_dir: str = "assignment2/Feature_Matching_Correspondence/SuperGlueData/images",
-                    pairs_file: str = "assignment2/Feature_Matching_Correspondence/SuperGlueData/pairs.txt"):
+                    output_dir: str = "SuperGlueData/images",
+                    pairs_file: str = "SuperGlueData/pairs.txt"):
         left_img_dir = os.path.join(mother_dir, "left")
         right_img_dir = os.path.join(mother_dir, "right")
         os.makedirs(output_dir, exist_ok=True)
@@ -43,12 +43,12 @@ class SuperGlue:
     def call_SuperGlue(self):
         call_superglue = [
                     sys.executable,
-                    "assignment2/SuperGluePretrainedNetwork/match_pairs.py",
+                    "SuperGluePretrainedNetwork/match_pairs.py",
                     "--superglue", "outdoor",
-                    "--output_dir", "assignment2/Feature_Matching_Correspondence/SuperGlueData",
+                    "--output_dir", "SuperGlueData",
                     "--viz",
-                    "--input_pairs", "assignment2/Feature_Matching_Correspondence/SuperGlueData/pairs.txt",
-                    "--input_dir", "assignment2/Feature_Matching_Correspondence/SuperGlueData/images",
+                    "--input_pairs", "SuperGlueData/pairs.txt",
+                    "--input_dir", "SuperGlueData/images",
                     "--resize", "-1", "-1",
                     "--cache",
                     "--max_keypoints", "2000"
@@ -65,7 +65,7 @@ class SuperGlue:
         Returns:
             matched_pairs: List of tuples [(kp0, kp1, confidence), ...] for the sample
         """
-        npz_path = f"assignment2/Feature_Matching_Correspondence/SuperGlueData/left_{sample_name}_right_{sample_name}_matches.npz"
+        npz_path = f"SuperGlueData/left_{sample_name}_right_{sample_name}_matches.npz"
         if not os.path.exists(npz_path):
             print(f"Warning: {npz_path} not found, skipping.")
             return []
@@ -87,7 +87,7 @@ class SuperGlue:
         
         return matched_pairs
 
-    def delete_npz_files(self, output_dir: str = "assignment2/Feature_Matching_Correspondence/SuperGlueData"):
+    def delete_npz_files(self, output_dir: str = "SuperGlueData"):
         """
         Delete all .npz files in the specified output directory.
         
@@ -103,13 +103,13 @@ class SuperGlue:
 
 if __name__ == "__main__":
     SG = SuperGlue()
-    SG.move_images("assignment2/Feature_Matching_Correspondence/training")
+    SG.move_images("training")
     SG.call_SuperGlue()
     # call_superglue = [
     #                 sys.executable,
     #                 "SuperGluePretrainedNetwork/match_pairs.py",
     #                 "--superglue", "outdoor",
-    #                 "--output_dir", "assignment2/Feature_Matching_Correspondence/SuperGlueData",
+    #                 "--output_dir", "SuperGlueData",
     #                 "--viz",
     #                 ""
     #             ]

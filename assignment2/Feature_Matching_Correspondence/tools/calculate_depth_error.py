@@ -72,8 +72,8 @@ def calculate_depth_error(gt_depth_dir: str, predicted_depth_file: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Calculate depth estimation errors.")
-    parser.add_argument("--gt_depth_dir", type=str, required=True, help="Path to the directory containing ground truth depth files.")
-    parser.add_argument("--predicted_depth_file", type=str, required=True, help="Path to the predicted depth file.")
+    parser.add_argument("--gt-depth-dir", type=str, required=True, help="Path to the directory containing ground truth depth files.")
+    parser.add_argument("--predicted-depth-file", type=str, required=True, help="Path to the predicted depth file. (P3_result.txt)")
 
     args = parser.parse_args()
 
