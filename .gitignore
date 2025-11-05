@@ -26,3 +26,5 @@ r2d2/
 
 *.npz
 *.zip
+
+*.weights
