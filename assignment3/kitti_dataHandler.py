@@ -14,8 +14,8 @@ class FrameCalib:
         p0-p3: (3, 4) Camera P matrices. Contains extrinsic and intrinsic parameters.
         r0_rect: (3, 3) Rectification matrix
         velo_to_cam: (3, 4) Transformation matrix from velodyne to cam coordinate
-            Point_Camera = P_cam * R0_rect * Tr_velo_to_cam * Point_Velodyne
-        """
+        Point_Camera = P_cam * R0_rect * Tr_velo_to_cam * Point_Velodyne
+    """
 
     def __init__(self):
         self.p0 = []

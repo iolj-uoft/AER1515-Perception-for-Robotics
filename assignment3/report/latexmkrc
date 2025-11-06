@@ -1,0 +1,7 @@
+# latexmkrc (project root)
+$pdflatex = 'pdflatex -interaction=nonstopmode -synctex=1 -file-line-error -shell-escape %O %S';
+
+# If you use an output directory, uncomment and keep it consistent everywhere:
+# $out_dir = 'out';
+
+$ENV{'TZ'}='America/Toronto';

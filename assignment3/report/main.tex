@@ -1,0 +1,153 @@
+\documentclass{rapport}
+\usepackage{lipsum}
+\usepackage{gensymb}
+\usepackage{float}
+\usepackage{graphicx} % Required for inserting images
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{minted}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{hyperref}
+
+\pdfminorversion=5
+\pdfcompresslevel=9
+\pdfobjcompresslevel=5
+
+\hypersetup{
+    colorlinks=true,        % Enable colored links
+    linkcolor=blue,         % Color for internal links
+    citecolor=black,         % Color for citations
+    filecolor=blue,         % Color for file links
+    urlcolor=blue           % Color for URLs
+}
+
+\title{file title} %title of the file
+
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+
+\lstset{style=mystyle}
+
+\begin{document}
+
+%----------- Report information ---------
+\logo{logos/uoft_logo.png}
+\uni{\textbf{University of Toronto}}
+\ttitle{AER1515 Perception for Robotics: Assignment 3} %title of the file
+\subject{AER1515} % Subject name
+\topic{Assignment 2} % Topic name
+
+\students{\textsc{Yang-Chen Lin}} % information related to the students
+
+%----------- Init -------------------
+        
+\buildmargins % display margins
+\buildcover % create the front cover of the document
+\toc % creates the table of contents
+
+%------------ Report body ----------------
+\section{Answers}
+\subsection{Part 1: Depth Estimation}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.63\textwidth]{images/est_depth_stack.png}
+    \caption{Estimateded depth using dense disparity maps. The color bar represents the depth in meters.}
+    \label{fig:1}
+\end{figure}
+\paragraph{Observations on the Depth Image Quality}
+The produced depth images show reasonable consistency across the scene, with smooth gradients along the road and clear separation between 
+near and far objects. Depth accuracy is generally higher for textured and well-lit surfaces, such as the road and nearby vehicles, 
+where disparity estimation remains stable and consistent. In contrast, reflective or low-texture areas, tree canopies, and occlusion 
+boundaries often exhibit noisy or discontinuous depth values due to unreliable or missing disparity information.
+
+\subsection{Part 2: 2D Bounding Box Detection}
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.68\textwidth]{images/yolo_detections_stack.png}
+    \caption{Estimated 2D bounding box using the YOLOv3 object detector with \texttt{confidence\_threshold:0.51} and \texttt{NMS\_threshold:0.6}}
+    \label{fig:2}
+\end{figure}
+
+\subsection{Part 3: Instance Segmentation}
+To perform the instance segmentation task, I implemented two following approaches:
+\begin{enumerate}
+    \item Basic Method
+    \item YOLOv11x-seg model
+\end{enumerate}
+
+\subsubsection{Basic Method}
+A typical non-learning method to perform instance segmentation is to:
+\begin{enumerate}
+    \item Calculate the average depth within the given bounding boxes
+    \item Set a distance threshold from the computed average depth and assign fitting pixels as the object's segmentation mask 
+\end{enumerate}
+The result are displayed below. Note that for the python scripts to generate segmentation masks using the basic methods 
+are limited to the train datasets, as the performance are deemed to be worse than 
+learning methods, so I utilized the ground truth depth map and bounding boxes provided with the data.
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/yolo_detections_basic.png} 
+        \subcaption{2D bounding boxes for train images.}
+    \end{minipage}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/est_seg_basic_stack.png}
+        \subcaption{Basic instance segmentation method with \texttt{distance\_threshold:5.8}}
+    \end{minipage}
+    \caption{}
+    \label{fig:3}
+\end{figure}
+
+From \href{fig:3}{Fig. 3}, we can see that the segmentation mask genreated by the basic method aren't very accurate. Therefore, it's
+time to utilize the power of deep learning methods.
+
+\subsubsection{YOLOv11x-seg Instance Segmentation Model}
+YOLOv11x-seg is an advanced instance segmentation model developed by Ultralytics \cite{yolo11_ultralytics}, based on the YOLO (You Only Look Once) 
+architecture. It performs real-time object detection and segmentation in a single forward pass through the network. The model 
+consists of a convolutional backbone for feature extraction, a neck with a feature pyramid network (FPN) for multi-scale feature 
+fusion, and a detection head that predicts bounding boxes, class probabilities, and pixel-level masks for each detected object. 
+Trained on large datasets like COCO, it uses anchor-free predictions and advanced loss functions to achieve high accuracy and 
+speed. The following \href{fig:4}{Fig. 4} shows the 2D bounding box and instance segmentation masks using this architecture.
+
+\begin{figure}[H]
+    \centering
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/est_bbox_yolov11_stack.png} 
+        \subcaption{2D bounding boxes detected by the YOLOv11x model.}
+    \end{minipage}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{images/est_seg_yolov11x_stack.png}
+        \subcaption{Instance segmentation masks for cars; generated by the YOLOv11x model.}
+    \end{minipage}
+    \caption{}
+    \label{fig:4}
+\end{figure}
+\bibliographystyle{ieeetr}  
+\bibliography{references} 
+
+\end{document}
